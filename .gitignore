@@ -1,0 +1,88 @@
+# ==========================================
+# Dependencies
+# ==========================================
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# ==========================================
+# Environment Variables & Secrets (CRITICAL)
+# ==========================================
+.env
+.env.*
+*.env
+!.env.example
+!*/.env.example
+!**/.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.cert
+
+# ==========================================
+# Build Outputs & Bundles
+# ==========================================
+dist/
+.dist/
+*/dist/
+build/
+*/build/
+out/
+.next/
+
+# ==========================================
+# User Uploads & Media (DO NOT COMMIT SENSITIVE/LARGE UPLOADS)
+# ==========================================
+uploads/*
+backend/uploads/*
+!backend/uploads/.gitkeep
+!backend/uploads/**/.gitkeep
+
+# ==========================================
+# Logs & Process Files
+# ==========================================
+logs/
+*/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==========================================
+# Testing & Coverage
+# ==========================================
+coverage/
+*/coverage/
+.nyc_output/
+.pytest_cache/
+
+# ==========================================
+# Runtime, Temporary & Vite Artifacts
+# ==========================================
+tmp/
+temp/
+.cache/
+vite.config.js.timestamp-*
+*.bak
+package.json.bak
+backend/package.json.bak
+
+# ==========================================
+# IDE & System Files
+# ==========================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini

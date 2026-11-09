@@ -1,0 +1,54 @@
+{
+  "name": "cnms-frontend",
+  "version": "1.0.0",
+  "description": "College Newsletter Management System - Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src --ext .jsx,.js",
+    "lint:fix": "eslint src --ext .jsx,.js --fix",
+    "format": "prettier --write src"
+  },
+  "keywords": [
+    "newsletter",
+    "college",
+    "management",
+    "events"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@reduxjs/toolkit": "^1.9.7",
+    "axios": "^1.18.1",
+    "lucide-react": "^1.28.0",
+    "react": "^18.2.0",
+    "react-beautiful-dnd": "^13.1.1",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.48.0",
+    "react-hot-toast": "^2.6.0",
+    "react-redux": "^8.1.3",
+    "react-router-dom": "^6.30.4",
+    "recharts": "^2.10.0",
+    "socket.io-client": "^4.8.3",
+    "tailwindcss": "^3.3.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/react": "^14.1.2",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.53.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.4.31",
+    "prettier": "^3.1.0",
+    "vite": "^5.0.2",
+    "vitest": "^1.0.3"
+  }
+}
