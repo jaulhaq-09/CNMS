@@ -205,7 +205,7 @@ exports.submitEvent = async (req, res) => {
       const coIds = (event.coDepartments || []).map((d) => d._id || d);
       if (coIds.length > 0) {
         const coCoordinators = await User.find({
-          role: 'COORDINATOR',
+          $or: [{ role: 'COORDINATOR' }, { roles: 'COORDINATOR' }],
           department: { $in: coIds },
           isActive: { $ne: false },
           _id: { $ne: req.user._id },

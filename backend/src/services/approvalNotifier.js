@@ -29,18 +29,6 @@ function dataFor(itemType, itemId, relatedUrl) {
         : { itemId, itemType, relatedUrl };
 }
 
-// A monthly report submits many items in a row. Email the coordinator once per
-// submitter every 10 minutes (the bell still shows every item).
-const lastEmailed = new Map();
-const EMAIL_WINDOW_MS = 10 * 60 * 1000;
-function shouldEmail(approver, submitter) {
-    const key = `${idOf(approver._id)}:${idOf(submitter?._id)}`;
-    const now = Date.now();
-    if (now - (lastEmailed.get(key) || 0) < EMAIL_WINDOW_MS) return false;
-    lastEmailed.set(key, now);
-    return true;
-}
-
 // Who should decide on a new submission?
 //  - the active Coordinator(s) of the item's CLUSTER within its department,
 //    except the person who submitted it (nobody approves their own work);
@@ -50,12 +38,12 @@ function shouldEmail(approver, submitter) {
 // Items without a cluster (older data) go to the department's Coordinators.
 async function findApprovers({ departmentId, cluster, submitter }) {
     const submitterId = idOf(submitter?._id);
-    const select = 'firstName lastName email role';
+    const select = 'firstName lastName email role roles';
     const byId = new Map();
 
     if (departmentId) {
         const query = {
-            role: 'COORDINATOR',
+            $or: [{ role: 'COORDINATOR' }, { roles: 'COORDINATOR' }],
             department: departmentId,
             isActive: { $ne: false },
         };
@@ -69,7 +57,7 @@ async function findApprovers({ departmentId, cluster, submitter }) {
 
     if (byId.size === 0 || submitter?.role === 'COORDINATOR') {
         const admins = await User.find({
-            role: 'SUPER_ADMIN',
+            $or: [{ role: 'SUPER_ADMIN' }, { roles: 'SUPER_ADMIN' }],
             isActive: { $ne: false },
         }).select(select);
         admins.forEach((u) => {
@@ -133,9 +121,11 @@ async function notifyApprovers({
                 logger.error(`Approval notification failed for ${approver.email}:`, error.message);
             }
 
-            // Only the cluster's Coordinator is emailed. A Super Admin who is
-            // here as a fallback gets the bell notification only.
-            if (approver.role === 'COORDINATOR' && (isResubmission || shouldEmail(approver, submitter))) {
+            // Email every time: a Coordinator must hear about each submission
+            // and resubmission, including when Coordinator is a secondary role.
+            const isCoordinator =
+                approver.role === 'COORDINATOR' || (approver.roles || []).includes('COORDINATOR');
+            if (isCoordinator) {
                 try {
                     await EmailService.sendApprovalRequestEmail(approver, {
                         itemLabel: label,
@@ -215,7 +205,7 @@ async function notifyAdminsOfApproval({
     try {
         const label = ITEM_LABELS[itemType] || 'submission';
         const admins = await User.find({
-            role: 'SUPER_ADMIN',
+            $or: [{ role: 'SUPER_ADMIN' }, { roles: 'SUPER_ADMIN' }],
             isActive: { $ne: false },
         }).select('_id');
 

@@ -76,7 +76,7 @@ class AuthService {
       }
 
       const token = this.generateToken(user._id, user.role);
-      const refreshToken = this.generateRefreshToken(user._id);
+      const refreshToken = this.generateRefreshToken(user._id, user.role);
 
       user.refreshTokens.push({ token: this.hashToken(refreshToken) });
       await user.save();
@@ -142,13 +142,6 @@ class AuthService {
 
       await user.resetLoginAttempts();
 
-      // 2FA challenge — don't issue real tokens yet
-      if (user.twoFactorEnabled) {
-        const challengeToken = this.generateToken(user._id, 'PENDING_2FA');
-        logger.info(`2FA challenge issued for: ${user.email}`);
-        return { requiresTwoFactor: true, challengeToken };
-      }
-
       const userRoles =
         Array.isArray(user.roles) && user.roles.length > 0
           ? user.roles
@@ -163,15 +156,24 @@ class AuthService {
         };
       }
 
-      const activeRole =
-        selectedRole && (userRoles.includes(selectedRole) || user.role === 'SUPER_ADMIN')
-          ? selectedRole
-          : userRoles[0] || user.role;
+      if (selectedRole && !userRoles.includes(selectedRole)) {
+        throw new AppError('The selected role is not assigned to your account.', 403);
+      }
+
+      const activeRole = selectedRole || userRoles[0] || user.role;
+
+      // Require role selection before issuing a 2FA challenge so the
+      // selected role can be preserved in the resulting session.
+      if (user.twoFactorEnabled) {
+        const challengeToken = this.generateToken(user._id, 'PENDING_2FA', { selectedRole: activeRole });
+        logger.info(`2FA challenge issued for: ${user.email}`);
+        return { requiresTwoFactor: true, challengeToken };
+      }
 
       user.lastLogin = new Date();
 
       const token = this.generateToken(user._id, activeRole);
-      const refreshToken = this.generateRefreshToken(user._id);
+      const refreshToken = this.generateRefreshToken(user._id, activeRole);
 
       user.refreshTokens.push({ token: this.hashToken(refreshToken), userAgent, ipAddress });
       if (user.refreshTokens.length > 5) {
@@ -224,17 +226,29 @@ class AuthService {
         throw new AppError('Invalid 2FA code', 401);
       }
 
+      const activeRole = decoded.selectedRole || user.role;
+      const userRoles =
+        Array.isArray(user.roles) && user.roles.length > 0
+          ? user.roles
+          : [user.role || 'FACULTY'];
+      if (!userRoles.includes(activeRole)) {
+        throw new AppError('This session role is no longer assigned to your account. Please log in again.', 401);
+      }
+
       user.lastLogin = new Date();
-      const token = this.generateToken(user._id, user.role);
-      const refreshToken = this.generateRefreshToken(user._id);
+      const token = this.generateToken(user._id, activeRole);
+      const refreshToken = this.generateRefreshToken(user._id, activeRole);
 
       user.refreshTokens.push({ token: this.hashToken(refreshToken) });
       await user.save();
 
       logger.info(`2FA login completed: ${user.email}`);
 
+      const profile = user.getPublicProfile();
+      profile.role = activeRole;
+
       return {
-        user: user.getPublicProfile(),
+        user: profile,
         token,
         refreshToken,
       };
@@ -254,13 +268,22 @@ class AuthService {
       }
 
       const hashedToken = this.hashToken(refreshToken);
-      const user = await User.findById(decoded.userId).select('+refreshTokens');
+      const user = await User.findById(decoded.userId).select('+refreshTokens.token');
 
       if (!user || !user.refreshTokens.some((rt) => rt.token === hashedToken)) {
         throw new AppError('Refresh token not recognized — please log in again', 401);
       }
 
-      const token = this.generateToken(user._id, user.role);
+      const activeRole = decoded.role || user.role;
+      const userRoles =
+        Array.isArray(user.roles) && user.roles.length > 0
+          ? user.roles
+          : [user.role || 'FACULTY'];
+      if (!userRoles.includes(activeRole)) {
+        throw new AppError('This session role is no longer assigned to your account. Please log in again.', 401);
+      }
+
+      const token = this.generateToken(user._id, activeRole);
       return { token };
     } catch (error) {
       logger.error('Refresh token error:', error.message);
@@ -493,7 +516,7 @@ class AuthService {
 
       user.lastLogin = new Date();
       const token = this.generateToken(user._id, user.role);
-      const refreshToken = this.generateRefreshToken(user._id);
+      const refreshToken = this.generateRefreshToken(user._id, user.role);
 
       user.refreshTokens.push({ token: this.hashToken(refreshToken) });
       await user.save();
@@ -509,17 +532,17 @@ class AuthService {
   }
 
   // --- Token helpers ---
-  static generateToken(userId, role) {
+  static generateToken(userId, role, additionalClaims = {}) {
     return jwt.sign(
-      { userId, role },
+      { userId, role, ...additionalClaims },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE || '15m' }
     );
   }
 
-  static generateRefreshToken(userId) {
+  static generateRefreshToken(userId, role) {
     return jwt.sign(
-      { userId, type: 'refresh' },
+      { userId, role, type: 'refresh' },
       process.env.REFRESH_TOKEN_SECRET,
       { expiresIn: process.env.REFRESH_TOKEN_EXPIRE || '30d' }
     );

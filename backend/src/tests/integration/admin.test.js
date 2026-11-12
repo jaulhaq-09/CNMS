@@ -16,6 +16,7 @@ jest.mock('../../services/emailService', () => ({
 const app = require('../../app');
 const User = require('../../models/User');
 const Department = require('../../models/Department');
+const Cluster = require('../../models/Cluster');
 const { connectTestDB, clearTestDB, closeTestDB } = require('../testDb');
 
 beforeAll(async () => {
@@ -162,6 +163,144 @@ describe('User admin', () => {
     expect(res.body.data.password).toBeUndefined();
   });
 
+  it('requires an explicitly selected role when creating a user', async () => {
+    const res = await request(app)
+      .post('/api/users')
+      .set('Authorization', `Bearer ${superAdmin.token}`)
+      .send({
+        email: 'norole@college.edu',
+        password: 'SecurePass123',
+        firstName: 'No',
+        lastName: 'Role',
+      });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a Coordinator without an assigned cluster', async () => {
+    const res = await request(app)
+      .post('/api/users')
+      .set('Authorization', `Bearer ${superAdmin.token}`)
+      .send({
+        email: 'unscoped-coordinator@college.edu',
+        password: 'SecurePass123',
+        firstName: 'Unscoped',
+        lastName: 'Coordinator',
+        role: 'COORDINATOR',
+        department: department._id,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/cluster/i);
+  });
+
+  it('validates cluster assignments for a Coordinator held as a secondary role', async () => {
+    const cluster = await Cluster.create({ name: 'AI', department: department._id });
+    const jaul = await User.create({
+      email: 'jaul@college.edu',
+      password: 'SecurePass123',
+      firstName: 'Jaul',
+      lastName: 'Haq',
+      role: 'GUEST',
+      roles: ['GUEST', 'COORDINATOR'],
+      department: department._id,
+      emailVerified: true,
+    });
+
+    const res = await request(app)
+      .put(`/api/users/${jaul._id}/access`)
+      .set('Authorization', `Bearer ${superAdmin.token}`)
+      .send({ role: 'GUEST', clusters: [cluster.name], sections: [] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.clusters).toEqual(['AI']);
+  });
+
+  it('allows clearing a Faculty member cluster assignment', async () => {
+    const cluster = await Cluster.create({ name: 'AI', department: department._id });
+    const created = await request(app)
+      .post('/api/users')
+      .set('Authorization', `Bearer ${superAdmin.token}`)
+      .send({
+        email: 'faculty-clear-cluster@college.edu',
+        password: 'SecurePass123',
+        firstName: 'Faculty',
+        lastName: 'Member',
+        role: 'FACULTY',
+        department: department._id,
+        clusters: [cluster.name],
+        sections: ['A'],
+      });
+
+    const res = await request(app)
+      .put(`/api/users/${created.body.data._id}/access`)
+      .set('Authorization', `Bearer ${superAdmin.token}`)
+      .send({
+        role: 'FACULTY',
+        department: department._id,
+        clusters: [],
+        sections: ['A'],
+        isActive: true,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.clusters).toEqual([]);
+    expect(res.body.data.sections).toEqual([]);
+  });
+
+  it('allows SUPER_ADMIN to update a user username', async () => {
+    const created = await request(app)
+      .post('/api/users')
+      .set('Authorization', `Bearer ${superAdmin.token}`)
+      .send({
+        email: 'username@college.edu',
+        password: 'SecurePass123',
+        firstName: 'User',
+        lastName: 'Name',
+        role: 'FACULTY',
+      });
+
+    const res = await request(app)
+      .put(`/api/users/${created.body.data._id}/details`)
+      .set('Authorization', `Bearer ${superAdmin.token}`)
+      .send({ employeeId: 'new-username' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.employeeId).toBe('new-username');
+  });
+
+  it('allows changing a user department and clears the old scope', async () => {
+    const newDepartment = await Department.create({ name: 'Engineering', code: 'ENG' });
+    const created = await request(app)
+      .post('/api/users')
+      .set('Authorization', `Bearer ${superAdmin.token}`)
+      .send({
+        email: 'department-change@college.edu',
+        password: 'SecurePass123',
+        firstName: 'Department',
+        lastName: 'Change',
+        role: 'FACULTY',
+        department: department._id,
+        clusters: ['AI'],
+        sections: ['A'],
+      });
+
+    const res = await request(app)
+      .put(`/api/users/${created.body.data._id}/access`)
+      .set('Authorization', `Bearer ${superAdmin.token}`)
+      .send({
+        role: 'FACULTY',
+        department: newDepartment._id,
+        clusters: [],
+        sections: [],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.department._id).toBe(newDepartment._id.toString());
+    expect(res.body.data.clusters).toEqual([]);
+    expect(res.body.data.sections).toEqual([]);
+  });
+
   it('rejects a non-SUPER_ADMIN creating a user', async () => {
     const res = await request(app)
       .post('/api/users')
@@ -193,6 +332,7 @@ describe('User admin', () => {
   });
 
   it('allows SUPER_ADMIN to update a user role and scope', async () => {
+    await Cluster.create({ name: 'AI', department: department._id });
     const created = await request(app)
       .post('/api/users')
       .set('Authorization', `Bearer ${superAdmin.token}`)

@@ -110,7 +110,7 @@ const validateCreateUser = [
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('firstName').trim().notEmpty().isLength({ max: 50 }),
   body('lastName').trim().notEmpty().isLength({ max: 50 }),
-  body('role').optional().isIn(['SUPER_ADMIN', 'COORDINATOR', 'FACULTY', 'GUEST']),
+  body('role').isIn(['SUPER_ADMIN', 'COORDINATOR', 'FACULTY', 'GUEST']).withMessage('Please choose a role'),
   handleValidationErrors,
 ];
 

@@ -6,17 +6,35 @@ const TRIGGER =
 const LOCKED = 'inline-flex items-center max-w-[180px] px-1.5 py-0.5 -mx-1.5 cursor-default'
 
 /**
- * Click the cell, pick a value from a dropdown, and it saves straight away.
+ * Click the cell, choose a value, then click away to save.
  * `onSave` should throw if saving failed (the page shows the error message).
  */
 export function SelectCell({ value, options, onSave, disabled, title, children }) {
   const [editing, setEditing] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [draft, setDraft] = useState(value)
   const selectRef = useRef(null)
+  const draftRef = useRef(value)
+  const cancelled = useRef(false)
+  const committing = useRef(false)
 
   useEffect(() => {
     if (editing) selectRef.current?.focus()
   }, [editing])
+
+  const commit = async () => {
+    if (cancelled.current || committing.current) return
+    const next = draftRef.current
+    setEditing(false)
+    if (next === value) return
+    committing.current = true
+    try {
+      await onSave(next)
+    } catch (err) {
+      // The page already showed the error.
+    } finally {
+      committing.current = false
+    }
+  }
 
   if (disabled) {
     return (
@@ -30,9 +48,14 @@ export function SelectCell({ value, options, onSave, disabled, title, children }
     return (
       <button
         type="button"
-        onClick={() => setEditing(true)}
+        onClick={() => {
+          cancelled.current = false
+          draftRef.current = value
+          setDraft(value)
+          setEditing(true)
+        }}
         title="Click to edit"
-        className={`${TRIGGER} ${busy ? 'opacity-50' : ''}`}
+        className={TRIGGER}
       >
         {children}
       </button>
@@ -42,22 +65,18 @@ export function SelectCell({ value, options, onSave, disabled, title, children }
   return (
     <select
       ref={selectRef}
-      value={value}
-      onChange={async (e) => {
-        const next = e.target.value
-        setEditing(false)
-        if (next === value) return
-        setBusy(true)
-        try {
-          await onSave(next)
-        } catch (err) {
-          // the page already showed the error
-        } finally {
-          setBusy(false)
+      value={draft}
+      onChange={(e) => {
+        draftRef.current = e.target.value
+        setDraft(e.target.value)
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          cancelled.current = true
+          setEditing(false)
         }
       }}
-      onBlur={() => setEditing(false)}
-      onKeyDown={(e) => e.key === 'Escape' && setEditing(false)}
       className="border border-[#C9962C] rounded-md px-2 py-1 text-sm bg-white focus:outline-none"
     >
       {options.map((o) => (
@@ -70,22 +89,65 @@ export function SelectCell({ value, options, onSave, disabled, title, children }
 }
 
 /**
- * Click the cell, tick the values you want in a small popup, press Save.
- * `loadOptions` returns a list of names (strings).
+ * Click the cell, change the selected values, then click away to save.
  */
-export function ChecklistCell({ values, loadOptions, onSave, disabled, title, children }) {
+export function ChecklistCell({
+  values,
+  options,
+  onSave,
+  disabled,
+  title,
+  children,
+  disabledValues = [],
+  labelFor = (value) => value,
+  includeNone = false,
+  noneLabel = 'None',
+}) {
   const [open, setOpen] = useState(false)
-  const [options, setOptions] = useState(null)
   const [draft, setDraft] = useState([])
   const [busy, setBusy] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
   const buttonRef = useRef(null)
+  const popupRef = useRef(null)
+  const draftRef = useRef([])
+  const committing = useRef(false)
+
+  const commit = async () => {
+    if (committing.current) return
+    committing.current = true
+    setBusy(true)
+    try {
+      await onSave(draftRef.current)
+      setOpen(false)
+    } catch (err) {
+      // The page already showed the error.
+    } finally {
+      committing.current = false
+      setBusy(false)
+    }
+  }
+
+  const commitRef = useRef(commit)
+  commitRef.current = commit
 
   useEffect(() => {
     if (!open) return undefined
     const onKey = (e) => e.key === 'Escape' && setOpen(false)
+    const onOutsideClick = (e) => {
+      if (
+        e.target instanceof Node &&
+        !buttonRef.current?.contains(e.target) &&
+        !popupRef.current?.contains(e.target)
+      ) {
+        commitRef.current()
+      }
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onOutsideClick)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onOutsideClick)
+    }
   }, [open])
 
   if (disabled) {
@@ -99,29 +161,23 @@ export function ChecklistCell({ values, loadOptions, onSave, disabled, title, ch
   const openPopup = async () => {
     const rect = buttonRef.current.getBoundingClientRect()
     setPos({ top: rect.bottom + 4, left: Math.max(8, Math.min(rect.left, window.innerWidth - 270)) })
-    setDraft(values || [])
-    setOptions(null)
+    const selected = values || []
+    draftRef.current = selected
+    setDraft(selected)
     setOpen(true)
-    try {
-      setOptions(await loadOptions())
-    } catch (err) {
-      setOptions([])
-    }
   }
 
-  const toggle = (name) =>
-    setDraft((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
+  const toggle = (name) => {
+    const next = draftRef.current.includes(name)
+      ? draftRef.current.filter((n) => n !== name)
+      : [...draftRef.current, name]
+    draftRef.current = next
+    setDraft(next)
+  }
 
-  const save = async () => {
-    setBusy(true)
-    try {
-      await onSave(draft)
-      setOpen(false)
-    } catch (err) {
-      // the page already showed the error
-    } finally {
-      setBusy(false)
-    }
+  const clearSelection = () => {
+    draftRef.current = []
+    setDraft([])
   }
 
   return (
@@ -138,47 +194,42 @@ export function ChecklistCell({ values, loadOptions, onSave, disabled, title, ch
 
       {open &&
         createPortal(
-          <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0" onClick={() => !busy && setOpen(false)} />
+          <div className="fixed inset-0 z-50 pointer-events-none">
             <div
+              ref={popupRef}
               style={{ top: pos.top, left: pos.left }}
-              className="absolute w-64 bg-white border border-[#E4E7EC] rounded-lg shadow-xl p-3 space-y-3"
+              className="absolute pointer-events-auto w-64 bg-white border border-[#E4E7EC] rounded-lg shadow-xl p-3"
             >
-              {options === null ? (
-                <p className="text-xs text-gray-400">Loading…</p>
-              ) : options.length === 0 ? (
-                <p className="text-xs text-gray-400">Nothing to choose from yet.</p>
-              ) : (
-                <div className="max-h-52 overflow-y-auto space-y-1">
-                  {options.map((name) => (
-                    <label
-                      key={name}
-                      className="flex items-center gap-2 text-sm text-[#1B2340] px-1.5 py-1 rounded hover:bg-[#F5F6F8] cursor-pointer"
-                    >
-                      <input type="checkbox" checked={draft.includes(name)} onChange={() => toggle(name)} />
-                      {name}
-                    </label>
-                  ))}
-                </div>
-              )}
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  disabled={busy}
-                  className="px-3 py-1.5 rounded-md border border-gray-300 text-xs text-gray-600 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={save}
-                  disabled={busy || options === null}
-                  className="px-3 py-1.5 rounded-md bg-[#1B2340] text-white text-xs font-medium disabled:opacity-50"
-                >
-                  {busy ? 'Saving…' : 'Save'}
-                </button>
+              <div className="max-h-52 overflow-y-auto space-y-1">
+                {includeNone && (
+                  <label className="flex items-center gap-2 text-sm text-[#1B2340] px-1.5 py-1 rounded hover:bg-[#F5F6F8] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draft.length === 0}
+                      disabled={busy}
+                      onChange={clearSelection}
+                    />
+                    {noneLabel}
+                  </label>
+                )}
+                {options.map((name) => (
+                  <label
+                    key={name}
+                    className={`flex items-center gap-2 text-sm text-[#1B2340] px-1.5 py-1 rounded ${
+                      disabledValues.includes(name) ? 'cursor-not-allowed opacity-60' : 'hover:bg-[#F5F6F8] cursor-pointer'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={draft.includes(name)}
+                      disabled={disabledValues.includes(name) || busy}
+                      onChange={() => toggle(name)}
+                    />
+                    {labelFor(name)}
+                  </label>
+                ))}
               </div>
+              {busy && <p className="text-xs text-gray-400 mt-2">Saving…</p>}
             </div>
           </div>,
           document.body
@@ -191,12 +242,23 @@ export function ChecklistCell({ values, loadOptions, onSave, disabled, title, ch
  * Click the cell, type, press Enter (or click away) to save, Esc to cancel.
  * `confirmMessage(newValue)` may return a question to ask before saving.
  */
-export function TextCell({ value, onSave, type = 'text', placeholder, confirmMessage, disabled, title, children }) {
+export function TextCell({
+  value,
+  onSave,
+  type = 'text',
+  placeholder,
+  confirmMessage,
+  disabled,
+  title,
+  children,
+  allowEmpty = false,
+}) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
   const cancelled = useRef(false)
+  const committing = useRef(false)
 
   useEffect(() => {
     if (editing) {
@@ -214,12 +276,13 @@ export function TextCell({ value, onSave, type = 'text', placeholder, confirmMes
   }
 
   const commit = async () => {
-    if (cancelled.current) return
+    if (cancelled.current || committing.current) return
     const next = draft.trim()
     setEditing(false)
-    if (!next || next === value) return
+    if ((!next && !allowEmpty) || next === value) return
     const question = confirmMessage?.(next)
     if (question && !window.confirm(question)) return
+    committing.current = true
     setBusy(true)
     try {
       await onSave(next)
@@ -227,6 +290,7 @@ export function TextCell({ value, onSave, type = 'text', placeholder, confirmMes
       // the page already showed the error
     } finally {
       setBusy(false)
+      committing.current = false
     }
   }
 

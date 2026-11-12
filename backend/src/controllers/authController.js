@@ -72,8 +72,7 @@ exports.refreshToken = catchAsync(async (req, res) => {
 });
 
 exports.getMe = catchAsync(async (req, res) => {
-  const user = await authService.getMe(req.user._id);
-  res.status(200).json({ success: true, data: user });
+  res.status(200).json({ success: true, data: req.user.getPublicProfile() });
 });
 
 exports.changePassword = catchAsync(async (req, res) => {

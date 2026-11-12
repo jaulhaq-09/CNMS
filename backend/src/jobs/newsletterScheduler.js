@@ -108,7 +108,10 @@ async function createMonthlyDraft(now) {
     return null;
   }
 
-  const admins = await User.find({ role: 'SUPER_ADMIN', isActive: { $ne: false } })
+  const admins = await User.find({
+    $or: [{ role: 'SUPER_ADMIN' }, { roles: 'SUPER_ADMIN' }],
+    isActive: { $ne: false },
+  })
     .select('firstName lastName email')
     .sort({ createdAt: 1 });
   if (admins.length === 0) {

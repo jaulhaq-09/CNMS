@@ -257,7 +257,10 @@ class EmailService {
     const query = { isActive: true };
 
     if (newsletter.recipients?.roles?.length) {
-      query.role = { $in: newsletter.recipients.roles };
+      query.$or = [
+        { role: { $in: newsletter.recipients.roles } },
+        { roles: { $in: newsletter.recipients.roles } },
+      ];
     }
     if (newsletter.recipients?.departments?.length) {
       query.department = { $in: newsletter.recipients.departments };

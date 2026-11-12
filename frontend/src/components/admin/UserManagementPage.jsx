@@ -4,19 +4,20 @@ import { useSelector } from 'react-redux'
 import React, { useState, useEffect } from 'react'
 import userService from '../../services/userService'
 import departmentService from '../../services/departmentService'
-import Pagination from '../common/Pagination'
 import clusterService from '../../services/clusterService'
-import sectionService from '../../services/sectionService'
+import Pagination from '../common/Pagination'
 import ImportUsersPanel from './ImportUsersPanel'
 import { SelectCell, ChecklistCell, TextCell } from './InlineCells'
-
-const ROLES = ['SUPER_ADMIN', 'COORDINATOR', 'FACULTY', 'GUEST']
 
 const ROLE_OPTIONS = [
   { key: 'ADMIN', dbRole: 'SUPER_ADMIN', label: 'ADMIN' },
   { key: 'COORDINATOR', dbRole: 'COORDINATOR', label: 'COORDINATOR' },
   { key: 'FACULTY', dbRole: 'FACULTY', label: 'FACULTY' },
+  { key: 'GUEST', dbRole: 'GUEST', label: 'GUEST' },
 ]
+
+const getNumberedClusters = (clusters = []) =>
+  clusters.filter((cluster) => /^cluster-\d+$/i.test(cluster))
 
 const FILTER_TABS = [
   { key: '', label: 'All', filterRole: '' },
@@ -25,34 +26,10 @@ const FILTER_TABS = [
   { key: 'FACULTY', label: 'Faculty', filterRole: 'FACULTY' },
 ]
 
-const ROLE_BADGE_STYLES = {
-  SUPER_ADMIN: 'bg-gradient-to-r from-[#C9962C] to-[#E0B563] text-[#1B2340]',
-  COORDINATOR: 'bg-[#EFF4FF] text-[#1B2340]',
-  FACULTY: 'bg-gray-100 text-gray-600',
-  GUEST: 'bg-gray-50 text-gray-400',
-}
-
-const ROLE_LABELS = {
-  SUPER_ADMIN: 'Admins',
-  COORDINATOR: 'Coordinators',
-  FACULTY: 'Faculty',
-  GUEST: 'Awaiting role',
-}
-
-const EMPTY_CREATE_FORM = {
-  email: '',
-  password: '',
-  firstName: '',
-  lastName: '',
-  role: 'FACULTY',
-  department: '',
-  clusters: [],
-  sections: [],
-}
-
 export default function UserManagementPage() {
   const [users, setUsers] = useState([])
   const [departments, setDepartments] = useState([])
+  const [clustersByDepartment, setClustersByDepartment] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
@@ -62,12 +39,7 @@ export default function UserManagementPage() {
   const [roleFilter, setRoleFilter] = useState('')
   const [departmentFilter, setDepartmentFilter] = useState('')
 
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM)
   const [saving, setSaving] = useState(false)
-
-  const [editingUser, setEditingUser] = useState(null)
-  const [accessForm, setAccessForm] = useState(null)
 
   const currentUser = useSelector((state) => state.auth?.user)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -114,13 +86,19 @@ export default function UserManagementPage() {
     username: '',
     email: '',
     password: '',
-    role: 'COORDINATOR',
+    role: '',
+    department: '',
+    clusters: [],
   })
 
   const handleQuickAddSubmit = async (e) => {
     e.preventDefault()
-    if (!quickForm.email || !quickForm.password) {
-      toast.error('Email and password are required')
+    if (!quickForm.username.trim() || !quickForm.email || !quickForm.password || !quickForm.role || !quickForm.department) {
+      toast.error('Username, email, password, role, and department are required')
+      return
+    }
+    if (quickForm.role === 'COORDINATOR' && quickForm.clusters.length === 0) {
+      toast.error('Choose at least one cluster for a Coordinator')
       return
     }
     setSaving(true)
@@ -129,7 +107,7 @@ export default function UserManagementPage() {
       const parts = rawUsername.split(/[._ ]+/).filter(Boolean)
       const firstName = parts[0] || 'User'
       const lastName = parts.slice(1).join(' ') || '-'
-      const chosenRole = quickForm.role || 'COORDINATOR'
+      const chosenRole = quickForm.role
 
       await userService.create({
         firstName,
@@ -137,11 +115,12 @@ export default function UserManagementPage() {
         email: quickForm.email.trim(),
         password: quickForm.password,
         role: chosenRole,
-        roles: [chosenRole],
+        department: quickForm.department,
+        clusters: quickForm.role === 'COORDINATOR' ? quickForm.clusters : [],
         employeeId: quickForm.username.trim() || undefined,
       })
       toast.success('User added successfully')
-      setQuickForm({ username: '', email: '', password: '', role: 'COORDINATOR' })
+      setQuickForm({ username: '', email: '', password: '', role: '', department: '', clusters: [] })
       loadUsers(search, 1)
       loadSummary()
     } catch (err) {
@@ -151,65 +130,29 @@ export default function UserManagementPage() {
     }
   }
 
-  const handleToggleRole = async (user, targetRole) => {
-    const currentRoles = Array.isArray(user.roles) && user.roles.length > 0
-      ? [...user.roles]
-      : [user.role || 'FACULTY']
-
-    let nextRoles
-    if (currentRoles.includes(targetRole)) {
-      if (currentRoles.length === 1) {
-        toast.error('A user must have at least one role.')
-        return
-      }
-      nextRoles = currentRoles.filter((r) => r !== targetRole)
-    } else {
-      nextRoles = [...currentRoles, targetRole]
+  const saveRoles = async (user, nextRoles) => {
+    if (!nextRoles.length) {
+      toast.error('A user must have at least one role.')
+      throw new Error('A user must have at least one role.')
     }
-
+    const currentRoles = Array.isArray(user.roles) && user.roles.length > 0
+      ? user.roles
+      : [user.role || 'GUEST']
+    const isSelf = user._id === (currentUser?._id || currentUser?.id)
+    if (isSelf && currentRoles.includes('SUPER_ADMIN') && !nextRoles.includes('SUPER_ADMIN')) {
+      toast.error('You cannot remove your own admin access.')
+      throw new Error('You cannot remove your own admin access.')
+    }
     try {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u._id === user._id
-            ? { ...u, roles: nextRoles, role: nextRoles[0] }
-            : u
-        )
-      )
       await userService.updateRoles(user._id, nextRoles)
+      setUsers((prev) =>
+        prev.map((u) => (u._id === user._id ? { ...u, roles: nextRoles, role: nextRoles[0] } : u))
+      )
       toast.success(`Roles updated for ${user.firstName || user.email}`)
       loadSummary()
     } catch (err) {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u._id === user._id
-            ? { ...u, roles: currentRoles, role: currentRoles[0] }
-            : u
-        )
-      )
       toast.error(err.response?.data?.message || 'Failed to update roles')
-    }
-  }
-
-  const handleToggleActive = async (user) => {
-    if (user._id === (currentUser?._id || currentUser?.id)) {
-      toast.error('You cannot change your own status.')
-      return
-    }
-    const nextState = !user.isActive
-    try {
-      await userService.updateAccess(user._id, {
-        role: user.role,
-        department: user.department?._id || undefined,
-        clusters: user.clusters || [],
-        sections: user.sections || [],
-        isActive: nextState,
-      })
-      setUsers((prev) =>
-        prev.map((u) => (u._id === user._id ? { ...u, isActive: nextState } : u))
-      )
-      toast.success(nextState ? 'User activated' : 'User deactivated')
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not update status')
+      throw err
     }
   }
 
@@ -224,108 +167,6 @@ export default function UserManagementPage() {
       setResendingId(null)
     }
   }
-
-  const [createClusterOptions, setCreateClusterOptions] = useState([])
-  const [createSectionOptions, setCreateSectionOptions] = useState([])
-  const [accessClusterOptions, setAccessClusterOptions] = useState([])
-  const [accessSectionOptions, setAccessSectionOptions] = useState([])
-
-  const handleCreateDepartmentChange = async (e) => {
-    const departmentId = e.target.value
-    setCreateForm((prev) => ({ ...prev, department: departmentId, clusters: [], sections: [] }))
-    setCreateSectionOptions([])
-    if (!departmentId) {
-      setCreateClusterOptions([])
-      return
-    }
-    try {
-      const res = await clusterService.getByDepartment(departmentId)
-      setCreateClusterOptions(res.data)
-    } catch (err) {
-      setCreateClusterOptions([])
-    }
-  }
-
-  const toggleCreateCluster = (name) => {
-    setCreateForm((prev) => ({
-      ...prev,
-      clusters: prev.clusters.includes(name)
-        ? prev.clusters.filter((c) => c !== name)
-        : [...prev.clusters, name],
-    }))
-  }
-
-  const toggleCreateSection = (name) => {
-    setCreateForm((prev) => ({
-      ...prev,
-      sections: prev.sections.includes(name)
-        ? prev.sections.filter((s) => s !== name)
-        : [...prev.sections, name],
-    }))
-  }
-
-  useEffect(() => {
-    const selectedIds = createClusterOptions
-      .filter((c) => createForm.clusters.includes(c.name))
-      .map((c) => c._id)
-    if (selectedIds.length === 0) {
-      setCreateSectionOptions([])
-      return
-    }
-    Promise.all(selectedIds.map((id) => sectionService.getByCluster(id)))
-      .then((results) => setCreateSectionOptions(results.flatMap((r) => r.data)))
-      .catch(() => setCreateSectionOptions([]))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createForm.clusters, createClusterOptions])
-
-  const handleAccessDepartmentChange = async (e) => {
-    const departmentId = e.target.value
-    setAccessForm((prev) => ({ ...prev, department: departmentId, clusters: [], sections: [] }))
-    setAccessSectionOptions([])
-    if (!departmentId) {
-      setAccessClusterOptions([])
-      return
-    }
-    try {
-      const res = await clusterService.getByDepartment(departmentId)
-      setAccessClusterOptions(res.data)
-    } catch (err) {
-      setAccessClusterOptions([])
-    }
-  }
-
-  const toggleAccessCluster = (name) => {
-    setAccessForm((prev) => ({
-      ...prev,
-      clusters: prev.clusters.includes(name)
-        ? prev.clusters.filter((c) => c !== name)
-        : [...prev.clusters, name],
-    }))
-  }
-
-  const toggleAccessSection = (name) => {
-    setAccessForm((prev) => ({
-      ...prev,
-      sections: prev.sections.includes(name)
-        ? prev.sections.filter((s) => s !== name)
-        : [...prev.sections, name],
-    }))
-  }
-
-  useEffect(() => {
-    if (!accessForm) return
-    const selectedIds = accessClusterOptions
-      .filter((c) => accessForm.clusters.includes(c.name))
-      .map((c) => c._id)
-    if (selectedIds.length === 0) {
-      setAccessSectionOptions([])
-      return
-    }
-    Promise.all(selectedIds.map((id) => sectionService.getByCluster(id)))
-      .then((results) => setAccessSectionOptions(results.flatMap((r) => r.data)))
-      .catch(() => setAccessSectionOptions([]))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessForm?.clusters, accessClusterOptions])
 
   useEffect(() => {
     loadUsers(search, 1)
@@ -359,8 +200,18 @@ export default function UserManagementPage() {
     try {
       const response = await departmentService.getAll()
       setDepartments(response.data)
+      const entries = await Promise.all(
+        response.data.map(async (department) => {
+          const clusters = await clusterService.getByDepartment(department._id)
+          return [
+            department._id,
+            getNumberedClusters((clusters.data || []).map((cluster) => cluster.name)),
+          ]
+        })
+      )
+      setClustersByDepartment(Object.fromEntries(entries))
     } catch (err) {
-      // non-fatal — dropdown just stays empty
+      toast.error(err.response?.data?.message || 'Could not load department clusters')
     }
   }
 
@@ -374,75 +225,19 @@ export default function UserManagementPage() {
     loadUsers(search, 1)
   }
 
-  const handleCreateChange = (e) => {
-    setCreateForm({ ...createForm, [e.target.name]: e.target.value })
-  }
-
-  const handleCreateSubmit = async (e) => {
-    e.preventDefault()
-    try {
-      setSaving(true)
-      setError('')
-      await userService.create({
-        ...createForm,
-        department: createForm.department || undefined,
-      })
-      toast.success('User created')
-      setShowCreateForm(false)
-      setCreateForm(EMPTY_CREATE_FORM)
-      loadUsers(search)
-    } catch (err) {
-      const message = err.response?.data?.message || 'Failed to create user'
-      setError(message)
-      toast.error(message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const openAccessEditor = async (user) => {
-    setEditingUser(user)
-    const departmentId = user.department?._id || ''
-    setAccessForm({
-      role: user.role,
-      department: departmentId,
-      clusters: user.clusters || [],
-      sections: user.sections || [],
-      isActive: user.isActive,
-    })
-    setAccessClusterOptions([])
-    setAccessSectionOptions([])
-    if (departmentId) {
-      try {
-        const res = await clusterService.getByDepartment(departmentId)
-        setAccessClusterOptions(res.data)
-      } catch (err) {
-        setAccessClusterOptions([])
-      }
-    }
-  }
-
-  const closeAccessEditor = () => {
-    setEditingUser(null)
-    setAccessForm(null)
-  }
-
-  const handleAccessChange = (e) => {
-    const { name, value, type, checked } = e.target
-    setAccessForm({ ...accessForm, [name]: type === 'checkbox' ? checked : value })
-  }
-
   // ---- Inline editing (click a cell) ----
 
   // Sends one change to the server together with the person's other
   // access values, and updates just that row on screen. Throws on failure
   // (after showing the message) so the cell can go back to its old value.
   const saveAccess = async (user, patch) => {
+    const departmentChanged = 'department' in patch &&
+      String(user.department?._id || user.department || '') !== String(patch.department || '')
     const body = {
       role: user.role,
       department: user.department?._id || undefined,
-      clusters: user.clusters || [],
-      sections: user.sections || [],
+      clusters: departmentChanged ? [] : user.clusters || [],
+      sections: departmentChanged ? [] : user.sections || [],
       isActive: user.isActive,
       ...patch,
     }
@@ -456,7 +251,13 @@ export default function UserManagementPage() {
       setUsers((prev) =>
         prev.map((u) =>
           u._id === user._id
-            ? { ...u, ...patch, department, ...(cleared ? { role: 'GUEST' } : {}) }
+            ? {
+                ...u,
+                ...patch,
+                department,
+                ...(departmentChanged && !('clusters' in patch) ? { clusters: [], sections: [] } : {}),
+                ...(cleared ? { role: 'GUEST' } : {}),
+              }
             : u
         )
       )
@@ -477,31 +278,6 @@ export default function UserManagementPage() {
       toast.error(err.response?.data?.message || 'Could not update this user')
       throw err
     }
-  }
-
-  const saveDepartment = (user, departmentId) =>
-    saveAccess(user, { department: departmentId || null, clusters: [], sections: [] })
-
-  const saveClusters = (user, names) => {
-    // If any cluster was removed, the old sections may no longer apply.
-    const removed = (user.clusters || []).some((c) => !names.includes(c))
-    return saveAccess(user, { clusters: names, sections: removed ? [] : user.sections || [] })
-  }
-
-  const loadClusterNames = async (user) => {
-    const id = user.department?._id
-    if (!id) return []
-    const res = await clusterService.getByDepartment(id)
-    return (res.data || []).map((c) => c.name)
-  }
-
-  const loadSectionNames = async (user) => {
-    const id = user.department?._id
-    if (!id) return []
-    const res = await clusterService.getByDepartment(id)
-    const mine = (res.data || []).filter((c) => (user.clusters || []).includes(c.name))
-    const lists = await Promise.all(mine.map((c) => sectionService.getByCluster(c._id)))
-    return [...new Set(lists.flatMap((r) => (r.data || []).map((s) => s.name)))]
   }
 
   const handleDeleteUser = async () => {
@@ -539,30 +315,6 @@ export default function UserManagementPage() {
     }
   }
 
-  const handleAccessSubmit = async (e) => {
-    e.preventDefault()
-    try {
-      setSaving(true)
-      setError('')
-      await userService.updateAccess(editingUser._id, {
-        role: accessForm.role,
-        department: accessForm.department || undefined,
-        clusters: accessForm.clusters,
-        sections: accessForm.sections,
-        isActive: accessForm.isActive,
-      })
-      toast.success('User access updated')
-      closeAccessEditor()
-      loadUsers(search)
-    } catch (err) {
-      const message = err.response?.data?.message || 'Failed to update user'
-      setError(message)
-      toast.error(message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -588,19 +340,14 @@ export default function UserManagementPage() {
             >
               Import from Excel
             </button>
-            <button
-              type="button"
-              onClick={() => setShowCreateForm((v) => !v)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-md border border-indigo-200 text-[#4338CA] hover:bg-indigo-50 transition-colors cursor-pointer"
-            >
-              {showCreateForm ? 'Close Full Form' : '+ New User'}
-            </button>
           </div>
         </div>
 
         <form onSubmit={handleQuickAddSubmit} className="flex flex-wrap items-center gap-3">
           <input
             name="username"
+            aria-label="Username"
+            required
             value={quickForm.username}
             onChange={(e) => setQuickForm((prev) => ({ ...prev, username: e.target.value }))}
             placeholder="Username"
@@ -608,6 +355,7 @@ export default function UserManagementPage() {
           />
           <input
             name="email"
+            aria-label="Email"
             type="email"
             required
             value={quickForm.email}
@@ -617,22 +365,59 @@ export default function UserManagementPage() {
           />
           <input
             name="password"
+            aria-label="Password"
             type="password"
             required
+            minLength={6}
             value={quickForm.password}
             onChange={(e) => setQuickForm((prev) => ({ ...prev, password: e.target.value }))}
             placeholder="Password"
             className="flex-1 min-w-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30"
           />
           <select
+            name="role"
+            aria-label="Role"
+            required
             value={quickForm.role}
             onChange={(e) => setQuickForm((prev) => ({ ...prev, role: e.target.value }))}
             className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white min-w-[150px] font-medium"
           >
+            <option value="" disabled>Select role</option>
             <option value="COORDINATOR">COORDINATOR</option>
             <option value="SUPER_ADMIN">ADMIN</option>
             <option value="FACULTY">FACULTY</option>
+            <option value="GUEST">GUEST</option>
           </select>
+          <select
+            name="department"
+            aria-label="Department"
+            required
+            value={quickForm.department}
+            onChange={(e) => setQuickForm((prev) => ({
+              ...prev,
+              department: e.target.value,
+              clusters: [],
+            }))}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white min-w-[180px]"
+          >
+            <option value="" disabled>Select department</option>
+            {departments.map((department) => (
+              <option key={department._id} value={department._id}>{department.name}</option>
+            ))}
+          </select>
+          {quickForm.role === 'COORDINATOR' && (
+            <ChecklistCell
+              values={quickForm.clusters}
+              options={clustersByDepartment[quickForm.department] || []}
+              disabled={!quickForm.department || !(clustersByDepartment[quickForm.department] || []).length}
+              title="Choose one or more clusters"
+              onSave={(clusters) => setQuickForm((prev) => ({ ...prev, clusters }))}
+            >
+              <span className="text-sm text-gray-700">
+                {quickForm.clusters.length ? quickForm.clusters.join(', ') : 'Select clusters'}
+              </span>
+            </ChecklistCell>
+          )}
           <button
             type="submit"
             disabled={saving}
@@ -684,312 +469,6 @@ export default function UserManagementPage() {
         </form>
       </div>
 
-      {showCreateForm && (
-        <form
-          onSubmit={handleCreateSubmit}
-          className="mb-6 p-5 border border-gray-200 rounded-lg bg-white shadow-sm"
-        >
-          <h2 className="text-lg font-semibold text-[#1B2340] mb-4">New User</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="user-firstName" className="block text-xs font-medium text-gray-600 mb-1">First Name</label>
-              <input
-                id="user-firstName"
-                name="firstName"
-                value={createForm.firstName}
-                onChange={handleCreateChange}
-                required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="user-lastName" className="block text-xs font-medium text-gray-600 mb-1">Last Name</label>
-              <input
-                id="user-lastName"
-                name="lastName"
-                value={createForm.lastName}
-                onChange={handleCreateChange}
-                required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="user-email" className="block text-xs font-medium text-gray-600 mb-1">Email</label>
-              <input
-                id="user-email"
-                name="email"
-                type="email"
-                value={createForm.email}
-                onChange={handleCreateChange}
-                required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="user-password" className="block text-xs font-medium text-gray-600 mb-1">Password</label>
-              <input
-                id="user-password"
-                name="password"
-                type="password"
-                value={createForm.password}
-                onChange={handleCreateChange}
-                required
-                minLength={6}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="user-role" className="block text-xs font-medium text-gray-600 mb-1">Role</label>
-              <select
-                id="user-role"
-                name="role"
-                value={createForm.role}
-                onChange={handleCreateChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="user-department" className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-              <select
-                id="user-department"
-                name="department"
-                value={createForm.department}
-                onChange={handleCreateDepartmentChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              >
-                <option value="">— None —</option>
-                {departments.map((d) => (
-                  <option key={d._id} value={d._id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Clusters</label>
-              {!createForm.department ? (
-                <p className="text-xs text-gray-400">Select a department first.</p>
-              ) : createClusterOptions.length === 0 ? (
-                <p className="text-xs text-gray-400">No clusters set up for this department yet.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {createClusterOptions.map((c) => (
-                    <label
-                      key={c._id}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${createForm.clusters.includes(c.name)
-                        ? 'bg-[#1B2340] text-white border-[#1B2340]'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-[#C9962C]/50'
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={createForm.clusters.includes(c.name)}
-                        onChange={() => toggleCreateCluster(c.name)}
-                        className="hidden"
-                      />
-                      {c.name}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Sections</label>
-              {createForm.clusters.length === 0 ? (
-                <p className="text-xs text-gray-400">Select at least one cluster first.</p>
-              ) : createSectionOptions.length === 0 ? (
-                <p className="text-xs text-gray-400">No sections set up for the selected cluster(s) yet.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {createSectionOptions.map((s) => (
-                    <label
-                      key={s._id}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${createForm.sections.includes(s.name)
-                        ? 'bg-[#1B2340] text-white border-[#1B2340]'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-[#C9962C]/50'
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={createForm.sections.includes(s.name)}
-                        onChange={() => toggleCreateSection(s.name)}
-                        className="hidden"
-                      />
-                      {s.name}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="flex gap-2 mt-4">
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-[#C9962C] text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-[#C9962C]/90 disabled:opacity-60"
-            >
-              {saving ? 'Creating...' : 'Create User'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCreateForm(false)}
-              className="text-sm font-medium px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
-      {editingUser && accessForm && (
-        <form
-          onSubmit={handleAccessSubmit}
-          className="mb-6 p-5 border border-gray-200 rounded-lg bg-white shadow-sm"
-        >
-          <h2 className="text-lg font-semibold text-[#1B2340] mb-4">
-            Edit Access — {editingUser.firstName} {editingUser.lastName}
-          </h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="access-role" className="block text-xs font-medium text-gray-600 mb-1">Role</label>
-              <select
-                id="access-role"
-                name="role"
-                value={accessForm.role}
-                onChange={handleAccessChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="access-department" className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-              <select
-                id="access-department"
-                name="department"
-                value={accessForm.department}
-                onChange={handleAccessDepartmentChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              >
-                <option value="">— None —</option>
-                {departments.map((d) => (
-                  <option key={d._id} value={d._id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Clusters</label>
-              {!accessForm.department ? (
-                <p className="text-xs text-gray-400">Select a department first.</p>
-              ) : accessClusterOptions.length === 0 ? (
-                accessForm.clusters.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {accessForm.clusters.map((cName) => (
-                      <label
-                        key={cName}
-                        className="px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer bg-[#1B2340] text-white border-[#1B2340]"
-                      >
-                        <input
-                          type="checkbox"
-                          value={cName}
-                          checked={true}
-                          readOnly
-                          className="hidden"
-                        />
-                        {cName}
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400">No clusters set up for this department yet.</p>
-                )
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {accessClusterOptions.map((c) => (
-                    <label
-                      key={c._id}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${accessForm.clusters.includes(c.name)
-                        ? 'bg-[#1B2340] text-white border-[#1B2340]'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-[#C9962C]/50'
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        value={c.name}
-                        checked={accessForm.clusters.includes(c.name)}
-                        onChange={() => toggleAccessCluster(c.name)}
-                        className="hidden"
-                      />
-                      {c.name}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Sections</label>
-              {accessForm.clusters.length === 0 ? (
-                <p className="text-xs text-gray-400">Select at least one cluster first.</p>
-              ) : accessSectionOptions.length === 0 ? (
-                <p className="text-xs text-gray-400">No sections set up for the selected cluster(s) yet.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {accessSectionOptions.map((s) => (
-                    <label
-                      key={s._id}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${accessForm.sections.includes(s.name)
-                        ? 'bg-[#1B2340] text-white border-[#1B2340]'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-[#C9962C]/50'
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={accessForm.sections.includes(s.name)}
-                        onChange={() => toggleAccessSection(s.name)}
-                        className="hidden"
-                      />
-                      {s.name}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2 col-span-2">
-              <input
-                type="checkbox"
-                name="isActive"
-                checked={accessForm.isActive}
-                onChange={handleAccessChange}
-                id="isActive"
-              />
-              <label htmlFor="isActive" className="text-sm text-gray-700">
-                Account active
-              </label>
-            </div>
-          </div>
-          <div className="flex gap-2 mt-4">
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-[#C9962C] text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-[#C9962C]/90 disabled:opacity-60"
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button
-              type="button"
-              onClick={closeAccessEditor}
-              className="text-sm font-medium px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
@@ -997,6 +476,8 @@ export default function UserManagementPage() {
               <th className="px-4 py-3">NAME</th>
               <th className="px-4 py-3">USERNAME</th>
               <th className="px-4 py-3">EMAIL</th>
+              <th className="px-4 py-3">DEPARTMENT</th>
+              <th className="px-4 py-3">CLUSTERS</th>
               <th className="px-4 py-3">ROLES</th>
               <th className="px-4 py-3">STATUS</th>
               <th className="px-4 py-3 text-right">ACTIONS</th>
@@ -1006,14 +487,14 @@ export default function UserManagementPage() {
             {loading ? (
               [1, 2, 3].map((i) => (
                 <tr key={i} className="border-t border-gray-100">
-                  <td colSpan={6} className="px-4 py-4">
+                  <td colSpan={8} className="px-4 py-4">
                     <div className="h-3.5 w-1/3 bg-gray-100 rounded animate-pulse" />
                   </td>
                 </tr>
               ))
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
                   No users found.
                 </td>
               </tr>
@@ -1021,70 +502,110 @@ export default function UserManagementPage() {
               users.map((user) => (
                 <tr key={user._id} className="border-t border-gray-100 hover:bg-[#F5F6F8] transition-colors">
                   <td className="px-4 py-3 align-top font-medium text-[#1B2340]">
-                    <div className="font-semibold text-gray-900">
-                      {user.firstName} {user.lastName}
-                    </div>
+                    <TextCell
+                      value={`${user.firstName || ''} ${user.lastName || ''}`.trim()}
+                      onSave={(name) => saveDetails(user, { name })}
+                    >
+                      <span className="font-semibold text-gray-900">
+                        {user.firstName} {user.lastName}
+                      </span>
+                    </TextCell>
                     <div className="text-xs text-gray-400 mt-0.5">
-                      {user.designation || user.department?.name || 'Faculty'}
+                      {user.designation || 'Faculty'}
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top text-xs font-mono text-gray-700">
-                    {user.employeeId || user.email?.split('@')[0] || '-'}
+                    <TextCell
+                      value={user.employeeId || user.email?.split('@')[0] || ''}
+                      onSave={(employeeId) => saveDetails(user, { employeeId })}
+                      allowEmpty
+                    >
+                      {user.employeeId || user.email?.split('@')[0] || '-'}
+                    </TextCell>
                   </td>
                   <td className="px-4 py-3 align-top text-xs text-gray-700">
-                    {user.email}
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <div className="space-y-1.5">
-                      {ROLE_OPTIONS.map((opt) => {
-                        const userRoles = Array.isArray(user.roles) && user.roles.length > 0
-                          ? user.roles
-                          : [user.role || 'FACULTY']
-                        const checked =
-                          userRoles.includes(opt.dbRole) ||
-                          (opt.dbRole === 'SUPER_ADMIN' && user.role === 'SUPER_ADMIN')
-                        const isSelf = user._id === (currentUser?._id || currentUser?.id)
-                        const isSelfAdmin = isSelf && opt.dbRole === 'SUPER_ADMIN'
-
-                        return (
-                          <label
-                            key={opt.key}
-                            className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none hover:text-[#4338CA]"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={isSelfAdmin}
-                              onChange={() => handleToggleRole(user, opt.dbRole)}
-                              className="rounded border-gray-300 text-[#4338CA] focus:ring-[#4338CA] h-3.5 w-3.5 cursor-pointer disabled:opacity-50"
-                            />
-                            <span className={checked ? 'text-gray-900 font-bold' : 'text-gray-500 font-normal'}>
-                              {opt.label}
-                            </span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
-                      }`}
+                    <TextCell
+                      value={user.email}
+                      type="email"
+                      onSave={(email) => saveDetails(user, { email })}
                     >
-                      {user.isActive ? 'Active' : 'Inactive'}
-                    </span>
+                      {user.email}
+                    </TextCell>
+                  </td>
+                  <td className="px-4 py-3 align-top text-xs text-gray-700">
+                    <SelectCell
+                      value={user.department?._id || ''}
+                      options={[
+                        { value: '', label: 'No department' },
+                        ...departments.map((department) => ({
+                          value: department._id,
+                          label: department.name,
+                        })),
+                      ]}
+                      onSave={(departmentId) => saveAccess(user, {
+                        department: departmentId || null,
+                      })}
+                    >
+                      {user.department?.name || 'No department'}
+                    </SelectCell>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <ChecklistCell
+                      values={getNumberedClusters(user.clusters || [])}
+                      options={clustersByDepartment[user.department?._id || user.department] || []}
+                      disabled={!user.department || !(clustersByDepartment[user.department?._id || user.department] || []).length}
+                      title="Choose one or more clusters"
+                      includeNone
+                      noneLabel="No cluster"
+                      onSave={(clusters) => saveAccess(user, { clusters })}
+                    >
+                      <span className="text-xs font-medium text-gray-700">
+                        {getNumberedClusters(user.clusters || []).join(', ') || 'No cluster'}
+                      </span>
+                    </ChecklistCell>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <ChecklistCell
+                      values={Array.isArray(user.roles) && user.roles.length > 0
+                        ? user.roles
+                        : [user.role || 'GUEST']}
+                      options={ROLE_OPTIONS.map((opt) => opt.dbRole)}
+                      labelFor={(role) => ROLE_OPTIONS.find((opt) => opt.dbRole === role)?.label || role}
+                      disabledValues={user._id === (currentUser?._id || currentUser?.id) ? ['SUPER_ADMIN'] : []}
+                      onSave={(roles) => saveRoles(user, roles)}
+                    >
+                      <span className="text-xs font-medium text-gray-700">
+                        {(Array.isArray(user.roles) && user.roles.length > 0
+                          ? user.roles
+                          : [user.role || 'GUEST'])
+                          .map((role) => ROLE_OPTIONS.find((opt) => opt.dbRole === role)?.label || role)
+                          .join(', ')}
+                      </span>
+                    </ChecklistCell>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <SelectCell
+                      value={user.isActive ? 'active' : 'inactive'}
+                      options={[
+                        { value: 'active', label: 'Active' },
+                        { value: 'inactive', label: 'Inactive' },
+                      ]}
+                      disabled={user._id === (currentUser?._id || currentUser?.id)}
+                      title="You cannot change your own status"
+                      onSave={(status) => saveAccess(user, { isActive: status === 'active' })}
+                    >
+                      <span
+                        className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          user.isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+                        }`}
+                      >
+                        {user.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </SelectCell>
                   </td>
                   <td className="px-4 py-3 align-top text-right">
                     <div className="flex items-center justify-end gap-3 text-xs font-medium">
-                      <button
-                        type="button"
-                        onClick={() => openAccessEditor(user)}
-                        className="text-[#4338CA] hover:underline cursor-pointer"
-                      >
-                        Edit Access
-                      </button>
-                      {user.role === 'COORDINATOR' && (
+                      {(user.role === 'COORDINATOR' || (user.roles || []).includes('COORDINATOR')) && (
                         <button
                           type="button"
                           onClick={() => openTeam(user)}
@@ -1092,15 +613,6 @@ export default function UserManagementPage() {
                           title="See the faculty in this coordinator's clusters"
                         >
                           Faculty
-                        </button>
-                      )}
-                      {user._id !== (currentUser?._id || currentUser?.id) && (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleActive(user)}
-                          className="text-amber-600 hover:underline cursor-pointer"
-                        >
-                          {user.isActive ? 'Deactivate' : 'Activate'}
                         </button>
                       )}
                       {user._id === (currentUser?._id || currentUser?.id) ? (

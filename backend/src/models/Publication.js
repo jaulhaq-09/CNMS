@@ -71,7 +71,7 @@ const publicationSchema = new mongoose.Schema({
       },
       action: {
         type: String,
-        enum: ['SUBMITTED', 'APPROVED', 'REJECTED'],
+        enum: ['SUBMITTED', 'RESUBMITTED', 'APPROVED', 'REJECTED'],
       },
       feedback: String,
       timestamp: {

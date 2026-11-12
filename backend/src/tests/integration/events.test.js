@@ -1,5 +1,6 @@
 require('dotenv').config();
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 
 jest.mock('../../services/emailService', () => ({
   sendVerificationEmail: jest.fn().mockResolvedValue(true),
@@ -9,6 +10,7 @@ jest.mock('../../services/emailService', () => ({
   sendSuspiciousLoginAlert: jest.fn().mockResolvedValue(true),
   sendEventApprovedEmail: jest.fn().mockResolvedValue(true),
   sendEventRejectedEmail: jest.fn().mockResolvedValue(true),
+  sendApprovalRequestEmail: jest.fn().mockResolvedValue(true),
   sendNewsletterEmail: jest.fn().mockResolvedValue(true),
   sendNewsletterToRecipients: jest.fn().mockResolvedValue({ totalSent: 0, delivered: 0, bounced: 0 }),
 }));
@@ -16,6 +18,8 @@ jest.mock('../../services/emailService', () => ({
 const app = require('../../app');
 const User = require('../../models/User');
 const Department = require('../../models/Department');
+const { findApprovers } = require('../../services/approvalNotifier');
+const EmailService = require('../../services/emailService');
 const { connectTestDB, clearTestDB, closeTestDB } = require('../testDb');
 
 beforeAll(async () => {
@@ -139,6 +143,129 @@ describe('Event lifecycle', () => {
 
     expect(approveRes.status).toBe(200);
     expect(approveRes.body.data.status).toBe('APPROVED');
+  });
+
+  it('emails the Coordinator on every submission and resubmission, and the submitter on every return', async () => {
+    EmailService.sendApprovalRequestEmail.mockClear();
+    EmailService.sendEventRejectedEmail.mockClear();
+
+    const withAuth = (req, token) => req.set('Authorization', ['Bearer', token].join(' '));
+    const createRes = await withAuth(request(app).post('/api/events'), faculty.token)
+      .send(validEventPayload);
+    const eventId = createRes.body.data._id;
+
+    const submit = () =>
+      withAuth(request(app).post(`/api/events/${eventId}/submit`), faculty.token);
+    const reject = () =>
+      withAuth(request(app).post(`/api/events/${eventId}/reject`), coordinator.token)
+        .send({ feedback: 'Please revise this submission.' });
+
+    expect((await submit()).status).toBe(200);
+    expect((await reject()).status).toBe(200);
+    expect((await submit()).status).toBe(200);
+    expect((await reject()).status).toBe(200);
+    expect((await submit()).status).toBe(200);
+
+    expect(EmailService.sendApprovalRequestEmail).toHaveBeenCalledTimes(3);
+    expect(EmailService.sendApprovalRequestEmail).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ email: 'coordinator@college.edu' }),
+      expect.objectContaining({ isResubmission: false })
+    );
+    expect(EmailService.sendApprovalRequestEmail).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ email: 'coordinator@college.edu' }),
+      expect.objectContaining({ isResubmission: true })
+    );
+    expect(EmailService.sendApprovalRequestEmail).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ email: 'coordinator@college.edu' }),
+      expect.objectContaining({ isResubmission: true })
+    );
+    expect(EmailService.sendEventRejectedEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses a selected secondary Coordinator role for requests and token refresh', async () => {
+    EmailService.sendApprovalRequestEmail.mockClear();
+    const secondaryCoordinator = await User.create({
+      email: 'jaul@college.edu',
+      password: 'SecurePass123',
+      firstName: 'Jaul',
+      lastName: 'Coordinator',
+      role: 'GUEST',
+      roles: ['GUEST', 'COORDINATOR'],
+      department: department._id,
+      clusters: ['AI'],
+      emailVerified: true,
+    });
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: 'jaul@college.edu',
+        password: 'SecurePass123',
+        selectedRole: 'COORDINATOR',
+      });
+
+    expect(login.status).toBe(200);
+    expect(login.body.data.user.role).toBe('COORDINATOR');
+
+    const me = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${login.body.data.token}`);
+    expect(me.status).toBe(200);
+    expect(me.body.data.role).toBe('COORDINATOR');
+
+    const refresh = await request(app)
+      .post('/api/auth/refresh-token')
+      .send({ refreshToken: login.body.data.refreshToken });
+    expect(refresh.status).toBe(200);
+    expect(jwt.verify(refresh.body.data.token, process.env.JWT_SECRET).role)
+      .toBe('COORDINATOR');
+
+    const event = await request(app)
+      .post('/api/events')
+      .set('Authorization', `Bearer ${faculty.token}`)
+      .send(validEventPayload);
+    expect(event.status).toBe(201);
+
+    const submitted = await request(app)
+      .post(`/api/events/${event.body.data._id}/submit`)
+      .set('Authorization', `Bearer ${faculty.token}`);
+    expect(submitted.status).toBe(200);
+    expect(EmailService.sendApprovalRequestEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ email: secondaryCoordinator.email }),
+      expect.any(Object)
+    );
+
+    const approved = await request(app)
+      .post(`/api/events/${event.body.data._id}/approve`)
+      .set('Authorization', `Bearer ${refresh.body.data.token}`)
+      .send({});
+    expect(approved.status).toBe(200);
+
+    expect(secondaryCoordinator.role).toBe('GUEST');
+  });
+
+  it('finds Coordinators assigned through a secondary role', async () => {
+    const secondaryCoordinator = await User.create({
+      email: 'secondary-coordinator@college.edu',
+      password: 'SecurePass123',
+      firstName: 'Secondary',
+      lastName: 'Coordinator',
+      role: 'GUEST',
+      roles: ['GUEST', 'COORDINATOR'],
+      department: department._id,
+      clusters: ['AI'],
+      emailVerified: true,
+    });
+
+    const approvers = await findApprovers({
+      departmentId: department._id,
+      cluster: 'AI',
+      submitter: faculty.user,
+    });
+
+    expect(approvers.some((approver) => approver._id.equals(secondaryCoordinator._id))).toBe(true);
   });
 
   it('requires feedback to reject an event', async () => {

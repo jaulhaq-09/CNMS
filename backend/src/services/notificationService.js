@@ -182,7 +182,9 @@ class NotificationService {
 
   static async sendNotificationToRole(role, notificationData, io = null) {
     try {
-      const users = await User.find({ role });
+      const users = await User.find({
+        $or: [{ role }, { roles: role }],
+      });
 
       const notifications = [];
       for (const user of users) {
@@ -257,7 +259,7 @@ class NotificationService {
       if (!item.department || !item.cluster) return null;
 
       const coordinator = await User.findOne({
-        role: 'COORDINATOR',
+        $or: [{ role: 'COORDINATOR' }, { roles: 'COORDINATOR' }],
         isActive: true,
         department: item.department._id || item.department,
         clusters: item.cluster,

@@ -32,6 +32,21 @@ const authenticate = async (req, res, next) => {
       });
     }
 
+    const userRoles =
+      Array.isArray(user.roles) && user.roles.length > 0
+        ? user.roles
+        : [user.role || 'FACULTY'];
+    if (!userRoles.includes(decoded.role)) {
+      return res.status(401).json({
+        success: false,
+        message: 'This session role is no longer assigned to your account. Please log in again.',
+      });
+    }
+
+    // The JWT records the role chosen at login. Keep that role for this
+    // request rather than replacing it with the user's primary stored role.
+    user.role = decoded.role;
+
     // Temporary-password accounts may only use the auth endpoints
     // (change password, who am I, logout) until they set their own password.
     if (user.mustChangePassword && !req.originalUrl.startsWith('/api/auth')) {

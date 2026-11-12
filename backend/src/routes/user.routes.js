@@ -22,7 +22,7 @@ const idStr = (v) => String((v && v._id) || v || '');
 async function checkScope({ role, department, clusters = [], sections = [], excludeIds = [] }) {
   if (role !== 'COORDINATOR' && role !== 'FACULTY') return null;
   if (!department || !mongoose.isValidObjectId(idStr(department))) return 'Please choose a department.';
-  if (!clusters.length) return 'Please choose at least one cluster.';
+  if (role === 'COORDINATOR' && !clusters.length) return 'Please choose at least one cluster.';
 
   const found = await Cluster.find({
     department: idStr(department),
@@ -47,7 +47,7 @@ async function checkScope({ role, department, clusters = [], sections = [], excl
 
   if (role === 'COORDINATOR') {
     const clash = await User.findOne({
-      role: 'COORDINATOR',
+      $or: [{ role: 'COORDINATOR' }, { roles: 'COORDINATOR' }],
       isActive: true,
       department: idStr(department),
       clusters: { $in: clusters },
@@ -215,15 +215,19 @@ router.get('/', authenticate, authorize('SUPER_ADMIN'), async (req, res) => {
     const { role, department, search, page = 1, limit = 20 } = req.query;
 
     const filter = {};
-    if (role) filter.role = role;
+    const conditions = [];
+    if (role) {
+      conditions.push({ $or: [{ role }, { roles: role }] });
+    }
     if (department) filter.department = department;
     if (search) {
-      filter.$or = [
+      conditions.push({ $or: [
         { firstName: { $regex: search, $options: 'i' } },
         { lastName: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
-      ];
+      ] });
     }
+    if (conditions.length) filter.$and = conditions;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -254,11 +258,25 @@ router.get('/', authenticate, authorize('SUPER_ADMIN'), async (req, res) => {
 // SUPER_ADMIN only — create a user with role/department/scope set directly
 router.post('/', authenticate, authorize('SUPER_ADMIN'), ...validateCreateUser, async (req, res) => {
   try {
-    const { email, password, firstName, lastName, role, department, clusters, sections } = req.body;
+    const { email, password, firstName, lastName, role, department, clusters, sections, employeeId } = req.body;
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
       return res.status(409).json({ success: false, message: 'Email already registered' });
+    }
+
+    const assignedClusters = asList(clusters);
+    const assignedSections = asList(sections);
+    if (role === 'COORDINATOR') {
+      const scopeError = await checkScope({
+        role,
+        department,
+        clusters: assignedClusters,
+        sections: assignedSections,
+      });
+      if (scopeError) {
+        return res.status(400).json({ success: false, message: scopeError });
+      }
     }
 
     const user = new User({
@@ -266,10 +284,12 @@ router.post('/', authenticate, authorize('SUPER_ADMIN'), ...validateCreateUser, 
       password,
       firstName,
       lastName,
-      role: role || 'GUEST',
+      role,
+      roles: [role],
+      employeeId: employeeId || undefined,
       department: department || undefined,
-      clusters: clusters || [],
-      sections: sections || [],
+      clusters: assignedClusters,
+      sections: assignedSections,
       emailVerified: true, // admin-created, skip verification flow
     });
 
@@ -337,11 +357,31 @@ router.put('/:id/details', authenticate, authorize('SUPER_ADMIN'), async (req, r
       }
     }
 
+    if (typeof body.employeeId === 'string') {
+      const employeeId = body.employeeId.trim();
+      if (employeeId.length > 100) {
+        return res.status(400).json({ success: false, message: 'Username must be 100 characters or fewer' });
+      }
+      if (employeeId && employeeId !== user.employeeId) {
+        const taken = await User.findOne({ employeeId, _id: { $ne: user._id } }).select('_id');
+        if (taken) {
+          return res.status(409).json({ success: false, message: 'That username is already used by another account' });
+        }
+      }
+      changes.employeeId = employeeId || undefined;
+    }
+
     if (Object.keys(changes).length === 0) {
       return res.json({
         success: true,
         message: 'Nothing changed',
-        data: { _id: user._id, firstName: user.firstName, lastName: user.lastName, email: user.email },
+        data: {
+          _id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          employeeId: user.employeeId,
+        },
       });
     }
 
@@ -383,7 +423,13 @@ router.put('/:id/details', authenticate, authorize('SUPER_ADMIN'), async (req, r
     res.json({
       success: true,
       message,
-      data: { _id: user._id, firstName: user.firstName, lastName: user.lastName, email: user.email },
+      data: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        employeeId: user.employeeId,
+      },
     });
   } catch (error) {
     logger.error('Update user details error:', error.message);
@@ -400,6 +446,19 @@ router.put('/:id/roles', authenticate, authorize('SUPER_ADMIN'), async (req, res
     const target = await User.findById(req.params.id);
     if (!target) {
       return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (target.isActive && roles.includes('COORDINATOR')) {
+      const scopeError = await checkScope({
+        role: 'COORDINATOR',
+        department: target.department,
+        clusters: target.clusters || [],
+        sections: target.sections || [],
+        excludeIds: [target._id],
+      });
+      if (scopeError) {
+        return res.status(400).json({ success: false, message: scopeError });
+      }
     }
 
     target.roles = roles;
@@ -434,7 +493,10 @@ router.put('/:id/access', authenticate, authorize('SUPER_ADMIN'), async (req, re
       if (idStr(target._id) === idStr(req.user._id)) {
         return res.status(400).json({ success: false, message: 'You cannot remove your own admin access.' });
       }
-      const admins = await User.countDocuments({ role: 'SUPER_ADMIN', isActive: true });
+      const admins = await User.countDocuments({
+        $or: [{ role: 'SUPER_ADMIN' }, { roles: 'SUPER_ADMIN' }],
+        isActive: true,
+      });
       if (admins <= 1) {
         return res.status(400).json({ success: false, message: 'You cannot remove the last Admin.' });
       }
@@ -447,20 +509,36 @@ router.put('/:id/access', authenticate, authorize('SUPER_ADMIN'), async (req, re
     const demoteOnClear =
       clearingDepartment && target.role !== 'SUPER_ADMIN' && (role === undefined || role === target.role);
     const nextRole = demoteOnClear ? 'GUEST' : role !== undefined ? role : target.role;
+    const nextScopeRole =
+      nextRole === 'COORDINATOR' || (target.roles || []).includes('COORDINATOR')
+        ? 'COORDINATOR'
+        : nextRole;
     const nextActive = isActive !== undefined ? isActive : target.isActive;
     const nextDept = clearingDepartment ? null : department !== undefined ? department : target.department;
     const nextClusters = clearingDepartment ? [] : clusters !== undefined ? asList(clusters) : target.clusters;
-    const nextSections = clearingDepartment ? [] : sections !== undefined ? asList(sections) : target.sections;
+    const clearingClusters = clusters !== undefined && nextClusters.length === 0;
+    const nextSections =
+      clearingDepartment || clearingClusters
+        ? []
+        : sections !== undefined
+          ? asList(sections)
+          : target.sections;
     const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+    const departmentChanged = idStr(nextDept) !== idStr(target.department);
+    const resettingScopeForDepartmentChange =
+      departmentChanged &&
+      nextClusters.length === 0 &&
+      nextSections.length === 0 &&
+      (role === undefined || role === target.role);
     const scopeChanged =
       nextRole !== target.role ||
       idStr(nextDept) !== idStr(target.department) ||
       !same(nextClusters, target.clusters || []) ||
       !same(nextSections, target.sections || []) ||
       (isActive === true && !target.isActive);
-    if (nextActive && scopeChanged) {
+    if (nextActive && scopeChanged && !resettingScopeForDepartmentChange) {
       const msg = await checkScope({
-        role: nextRole,
+        role: nextScopeRole,
         department: nextDept,
         clusters: nextClusters,
         sections: nextSections,
@@ -470,16 +548,22 @@ router.put('/:id/access', authenticate, authorize('SUPER_ADMIN'), async (req, re
     }
 
     const update = { updatedAt: new Date() };
-    if (role !== undefined) update.role = role;
+    if (role !== undefined) {
+      update.role = role;
+      update.roles = [...new Set([...(target.roles || []), role])];
+    }
     if (department !== undefined) update.department = department;
     if (clusters !== undefined) update.clusters = clusters;
-    if (sections !== undefined) update.sections = sections;
+    if (sections !== undefined || clearingClusters) update.sections = nextSections;
     if (isActive !== undefined) update.isActive = isActive;
     if (clearingDepartment) {
       update.department = null;
       update.clusters = [];
       update.sections = [];
-      if (demoteOnClear) update.role = 'GUEST';
+      if (demoteOnClear) {
+        update.role = 'GUEST';
+        update.roles = ['GUEST'];
+      }
     }
 
     const user = await User.findByIdAndUpdate(req.params.id, update, {
@@ -593,11 +677,14 @@ router.get('/:id/team', authenticate, authorize('SUPER_ADMIN'), async (req, res)
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ success: false, message: 'Invalid user id' });
     }
-    const coordinator = await User.findById(req.params.id).select('role department clusters');
+    const coordinator = await User.findById(req.params.id).select('role roles department clusters');
     if (!coordinator) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-    if (coordinator.role !== 'COORDINATOR') {
+    if (
+      coordinator.role !== 'COORDINATOR' &&
+      !(coordinator.roles || []).includes('COORDINATOR')
+    ) {
       return res.status(400).json({ success: false, message: 'This person is not a Coordinator.' });
     }
 
@@ -607,7 +694,7 @@ router.get('/:id/team', authenticate, authorize('SUPER_ADMIN'), async (req, res)
     }
 
     const people = await User.find({
-      role: 'FACULTY',
+      $or: [{ role: 'FACULTY' }, { roles: 'FACULTY' }],
       department: coordinator.department,
       clusters: { $in: clusters },
     })
@@ -644,7 +731,9 @@ router.delete('/:id', authenticate, authorize('SUPER_ADMIN'), async (req, res) =
     }
 
     if (user.role === 'SUPER_ADMIN') {
-      const admins = await User.countDocuments({ role: 'SUPER_ADMIN' });
+      const admins = await User.countDocuments({
+        $or: [{ role: 'SUPER_ADMIN' }, { roles: 'SUPER_ADMIN' }],
+      });
       if (admins <= 1) {
         return res.status(400).json({ success: false, message: 'You cannot delete the last Admin.' });
       }
