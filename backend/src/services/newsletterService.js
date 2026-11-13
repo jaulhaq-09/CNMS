@@ -5,6 +5,7 @@ const FacultyAchievement = require('../models/FacultyAchievement');
 const NptelCourse = require('../models/NptelCourse');
 const Newsletter = require('../models/Newsletter');
 const NewsletterTemplate = require('../models/NewsletterTemplate');
+const Report = require('../models/Report');
 const SettingsService = require('./settingsService');
 const EmailService = require('./emailService');
 const aiService = require('./aiService');
@@ -187,6 +188,150 @@ class NewsletterService {
       logger.error('Generate newsletter error:', error.message);
       throw error;
     }
+  }
+
+  static async generateFromConsolidatedReport(reportId, templateId, createdBy) {
+    try {
+      const report = await Report.findById(reportId);
+      if (!report) throw new Error('Consolidated report not found');
+      if (report.type !== 'INSTITUTIONAL_REPORT' || report.status !== 'CONSOLIDATED') {
+        throw new Error('Only a consolidated institutional report can be used to create a newsletter');
+      }
+
+      const existing = await Newsletter.findOne({ sourceReport: report._id });
+      if (existing) return { newsletter: existing, alreadyCreated: true };
+
+      const curatedItems = (report.curatedItems || []).filter((item) => item.included !== false);
+      if (curatedItems.length === 0) {
+        throw new Error('This consolidated report has no curated activities to publish');
+      }
+
+      const settings = await SettingsService.getSettings();
+      let template;
+      if (templateId) {
+        template = await NewsletterTemplate.findById(templateId);
+        if (!template) throw new Error('Template not found');
+      } else {
+        template = await this.getDefaultTemplate();
+      }
+      if (!template) {
+        throw new Error(
+          'No newsletter template found. Please create one, or ask an admin to designate an MPR template.'
+        );
+      }
+
+      const itemDates = curatedItems
+        .map((item) => (item.date ? new Date(item.date) : null))
+        .filter((date) => date && !Number.isNaN(date.getTime()))
+        .sort((a, b) => a - b);
+      const fallbackDate = new Date(report.createdAt || Date.now());
+      const periodStartDate = itemDates[0] || fallbackDate;
+      const periodEndDate = itemDates[itemDates.length - 1] || fallbackDate;
+      const compiledHtml = this.generateConsolidatedNewsletterHTML({
+        settings,
+        report,
+        curatedItems,
+        startDate: periodStartDate,
+        endDate: periodEndDate,
+      });
+
+      const newsletter = new Newsletter({
+        name: `${settings.instituteName} Newsletter — Volume ${settings.currentVolume}, Issue ${settings.currentIssue}`,
+        description: `Coordinator-curated content consolidated from ${report.sourceReportIds?.length || 0} cluster reports.`,
+        compiledHtml,
+        template: template._id,
+        sourceReport: report._id,
+        periodStartDate,
+        periodEndDate,
+        status: 'DRAFT',
+        createdBy,
+        recipients: {
+          roles: ['FACULTY', 'COORDINATOR', 'SUPER_ADMIN'],
+          departments: [],
+          totalCount: curatedItems.length,
+        },
+      });
+
+      try {
+        await newsletter.save();
+      } catch (error) {
+        if (error.code === 11000) {
+          const createdNewsletter = await Newsletter.findOne({ sourceReport: report._id });
+          if (createdNewsletter) return { newsletter: createdNewsletter, alreadyCreated: true };
+        }
+        throw error;
+      }
+
+      template.usageCount = (template.usageCount || 0) + 1;
+      template.lastUsedAt = new Date();
+      await template.save();
+      await SettingsService.updateSettings({ currentIssue: settings.currentIssue + 1 }, createdBy);
+
+      logger.info(`Newsletter generated from consolidated report ${report._id}: ${newsletter._id}`);
+      return { newsletter, alreadyCreated: false };
+    } catch (error) {
+      logger.error('Generate newsletter from consolidated report error:', error.message);
+      throw error;
+    }
+  }
+
+  static generateConsolidatedNewsletterHTML({ settings, report, curatedItems, startDate, endDate }) {
+    const monthYear = new Date(startDate).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+    const period = `${new Date(startDate).toLocaleDateString()} – ${new Date(endDate).toLocaleDateString()}`;
+    const typeLabels = {
+      EVENT: 'Events',
+      PUBLICATION: 'Publications',
+      PATENT: 'Patents',
+      ACHIEVEMENT: 'Faculty Achievements',
+      NPTEL: 'NPTEL Certifications',
+    };
+
+    return `
+      <html>
+        <body style="font-family: Georgia, 'Times New Roman', serif; max-width: 800px; margin: 0 auto; color: #1a1a1a;">
+          ${this.renderCoverPage(settings, monthYear)}
+          ${this.renderMasthead(settings)}
+          <div style="padding:24px 40px 8px;">
+            <h2 style="background:#FBEBC9; padding:8px 12px; font-size:16px; margin:0 0 8px 0; border-left:4px solid #C9962C;">
+              ${esc(report.name)}
+            </h2>
+            <p style="font-size:12px; color:#667085; margin:0 0 16px;">Reporting period: ${esc(period)}</p>
+            ${curatedItems
+              .map((item) => {
+                const itemDate = item.date && !Number.isNaN(new Date(item.date).getTime())
+                  ? new Date(item.date).toLocaleDateString()
+                  : '';
+                const details = [
+                  item.facultyName,
+                  item.departmentName || item.department,
+                  item.clusterName || item.cluster,
+                  itemDate,
+                ]
+                  .filter(Boolean)
+                  .map((value) => esc(value))
+                  .join(' &middot; ');
+
+                return `
+                  <article style="border-bottom:1px solid #E4E7EC; padding:12px 0;">
+                    <p style="margin:0 0 4px; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#9A6B17;">
+                      ${esc(typeLabels[item.type] || item.type || 'Activity')}
+                    </p>
+                    <h3 style="margin:0 0 6px; font-size:15px;">${esc(item.title || 'Untitled activity')}</h3>
+                    ${details ? `<p style="margin:0 0 6px; font-size:11px; color:#667085;">${details}</p>` : ''}
+                    ${item.description ? `<p style="margin:0; font-size:13px; line-height:1.6;">${esc(item.description)}</p>` : ''}
+                    ${item.coordinatorRemarks ? `<p style="margin:6px 0 0; font-size:12px; color:#475467;"><strong>Coordinator note:</strong> ${esc(item.coordinatorRemarks)}</p>` : ''}
+                  </article>
+                `;
+              })
+              .join('')}
+          </div>
+          ${this.renderFooter(settings)}
+        </body>
+      </html>
+    `;
   }
 
   // Kept for possible future use (e.g. an optional narrative summary
@@ -523,7 +668,8 @@ class NewsletterService {
           .skip(skip)
           .limit(limit)
           .populate('createdBy', 'firstName lastName')
-          .populate('department', 'name'),
+          .populate('department', 'name')
+          .populate('sourceReport', 'name'),
         Newsletter.countDocuments(query),
       ]);
 
@@ -547,6 +693,7 @@ class NewsletterService {
         .populate('createdBy', 'firstName lastName email')
         .populate('publishedBy', 'firstName lastName email')
         .populate('department', 'name')
+        .populate('sourceReport', 'name')
         .populate('includedEvents.eventId', 'eventName eventDate');
 
       if (!newsletter) {

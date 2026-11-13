@@ -3,11 +3,12 @@ import TemplateBuilder from '../components/TemplateBuilder'
 import TemplateList from '../components/TemplateList'
 import usePermissions from '../hooks/usePermissions'
 import { PERMISSIONS } from '../config/permissions'
+import PageHeader from '../components/common/PageHeader'
 
 export default function TemplatePage() {
   const [view, setView] = useState('list')
   const [editingTemplateId, setEditingTemplateId] = useState(null)
-  const { can } = usePermissions()
+  const { can, role } = usePermissions()
 
   const handleNewTemplate = () => {
     setEditingTemplateId(null)
@@ -31,6 +32,12 @@ export default function TemplatePage() {
 
   return (
     <div className="space-y-6">
+      {role !== 'SUPER_ADMIN' && (
+        <PageHeader
+          title={view === 'builder' ? (editingTemplateId ? 'Edit template' : 'New template') : 'Templates'}
+          description={view === 'list' ? 'Create and manage newsletter templates.' : undefined}
+        />
+      )}
       <nav className="flex gap-2">
         <button
           onClick={() => setView('list')}

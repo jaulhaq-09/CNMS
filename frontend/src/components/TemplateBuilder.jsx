@@ -313,7 +313,7 @@ export default function TemplateBuilder({ templateId = null, onSave = null }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_360px] gap-4 items-start">
+      <div className="grid grid-cols-1 gap-4 items-start lg:grid-cols-[200px_minmax(0,1fr)] 2xl:grid-cols-[200px_minmax(0,1fr)_320px]">
         <BlockPalette onAddBlock={handleAddBlock} />
 
         <TemplateEditor
@@ -329,7 +329,9 @@ export default function TemplateBuilder({ templateId = null, onSave = null }) {
           contentEditable={!!activePage?.contentEditable}
         />
 
-        <TemplatePreview blocks={activePage?.blocks || []} pageLabel={activePage?.name} />
+        <div className="lg:col-span-2 2xl:col-span-1">
+          <TemplatePreview blocks={activePage?.blocks || []} pageLabel={activePage?.name} />
+        </div>
       </div>
     </div>
   )

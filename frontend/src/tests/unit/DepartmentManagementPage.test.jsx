@@ -79,7 +79,7 @@ describe('DepartmentManagementPage', () => {
     fireEvent.change(screen.getByLabelText('Name'), {
       target: { value: 'Physics' },
     })
-    fireEvent.change(screen.getByLabelText('Code'), {
+    fireEvent.change(screen.getByLabelText(/Short code/), {
       target: { value: 'PHY' },
     })
 
@@ -98,11 +98,23 @@ describe('DepartmentManagementPage', () => {
     render(<DepartmentManagementPage />);
     await screen.findByText('Computer Science');
 
-    const editButtons = screen.getAllByText('Edit');
-    fireEvent.click(editButtons[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Manage' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
 
     expect(screen.getByDisplayValue('Computer Science')).toBeInTheDocument();
     expect(screen.getByDisplayValue('CS')).toBeInTheDocument();
+  });
+
+  it('groups department details and structure under one management action', async () => {
+    departmentService.getAll.mockResolvedValue({ data: mockDepartments });
+
+    render(<DepartmentManagementPage />);
+    await screen.findByText('Computer Science');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Manage' })[0]);
+
+    expect(screen.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Clusters & sections' })).toBeInTheDocument();
   });
 
   it('deactivates a department after confirming', async () => {

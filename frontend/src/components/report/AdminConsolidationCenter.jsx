@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   FileText,
@@ -16,10 +17,12 @@ import {
   Award,
 } from 'lucide-react'
 import reportService from '../../services/reportService'
+import newsletterService from '../../services/newsletterService'
 import collegeLogo from '../../assets/college-logo.jpg'
 import { DraftRestoredBanner } from '../../hooks/useFormDraft'
 
 export default function AdminConsolidationCenter() {
+  const navigate = useNavigate()
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState([])
@@ -30,6 +33,7 @@ export default function AdminConsolidationCenter() {
   const [adminNotes, setAdminNotes] = useState('')
   const [lastMasterReport, setLastMasterReport] = useState(null)
   const [draftRestored, setDraftRestored] = useState(false)
+  const [creatingNewsletterFor, setCreatingNewsletterFor] = useState(null)
 
   const draftKey = 'cnms_draft_admin_consolidation'
 
@@ -102,15 +106,35 @@ export default function AdminConsolidationCenter() {
 
   const selectAll = (select) => {
     if (select) {
-      setSelectedIds(reports.map((r) => r._id))
+      setSelectedIds(pendingReports.map((r) => r._id))
     } else {
       setSelectedIds([])
     }
   }
 
+  const openNewsletterDraft = async (report) => {
+    const consolidatedReportId = report.consolidatedReportId?._id || report.consolidatedReportId
+    if (!consolidatedReportId) {
+      toast.error('The consolidated institutional report is unavailable.')
+      return
+    }
+
+    setCreatingNewsletterFor(report._id)
+    try {
+      const response = await newsletterService.generateFromConsolidatedReport(consolidatedReportId)
+      toast.success(response.message || 'Newsletter draft is ready for review.')
+      navigate('/newsletters', { state: { newsletterId: response.data._id } })
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not create a newsletter draft.')
+    } finally {
+      setCreatingNewsletterFor(null)
+    }
+  }
+
   const handleConsolidate = async (e) => {
     e.preventDefault()
-    if (selectedIds.length === 0) {
+    const reportIds = selectedIds.filter((id) => pendingReports.some((report) => report._id === id))
+    if (reportIds.length === 0) {
       toast.error('Please select at least one coordinator report to consolidate.')
       return
     }
@@ -118,7 +142,7 @@ export default function AdminConsolidationCenter() {
     setConsolidating(true)
     try {
       const res = await reportService.consolidateReports({
-        reportIds: selectedIds,
+        reportIds,
         name: masterName,
         adminNotes,
       })
@@ -142,9 +166,10 @@ export default function AdminConsolidationCenter() {
 
   const pendingReports = reports.filter((r) => r.status === 'SUBMITTED_TO_ADMIN')
   const consolidatedReports = reports.filter((r) => r.status === 'CONSOLIDATED')
+  const selectedPendingIds = selectedIds.filter((id) => pendingReports.some((report) => report._id === id))
 
   const totalItemsSelected = reports
-    .filter((r) => selectedIds.includes(r._id))
+    .filter((r) => selectedPendingIds.includes(r._id))
     .reduce((sum, r) => sum + (r.curatedItems?.length || 0), 0)
 
   return (
@@ -155,43 +180,37 @@ export default function AdminConsolidationCenter() {
           message="Your selected coordinator reports and draft notes have been restored from your previous session."
         />
       )}
-      {/* Header and Summary Cards */}
-      <div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-          Admin Report Consolidation Center
-        </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
+      <p className="text-sm text-[#667085] max-w-3xl">
           Collect cluster reports from all coordinators, review curated faculty activities, and merge
           them into the final institutional newsletter report.
-        </p>
-      </div>
+      </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <div className="text-2xl font-bold text-gray-900">{reports.length}</div>
-          <div className="text-xs text-gray-500 mt-1">Total Coordinator Reports</div>
+        <div className="bg-white border border-[#E4E7EC] rounded-xl p-5 shadow-sm">
+          <div className="text-2xl font-semibold text-[#1B2340]">{reports.length}</div>
+          <div className="text-xs text-[#667085] mt-1">Total coordinator reports</div>
         </div>
-        <div className="bg-white border border-amber-200 rounded-xl p-4 shadow-sm bg-amber-50/30">
-          <div className="text-2xl font-bold text-amber-700">{pendingReports.length}</div>
-          <div className="text-xs text-amber-600 mt-1">Pending Consolidation</div>
+        <div className="bg-[#FFFBF2] border border-[#F4DBA3] rounded-xl p-5 shadow-sm">
+          <div className="text-2xl font-semibold text-[#92400E]">{pendingReports.length}</div>
+          <div className="text-xs text-[#B54708] mt-1">Pending consolidation</div>
         </div>
-        <div className="bg-white border border-purple-200 rounded-xl p-4 shadow-sm bg-purple-50/30">
-          <div className="text-2xl font-bold text-purple-700">{consolidatedReports.length}</div>
-          <div className="text-xs text-purple-600 mt-1">Already Consolidated</div>
+        <div className="bg-[#F0F9F4] border border-[#B7E4CE] rounded-xl p-5 shadow-sm">
+          <div className="text-2xl font-semibold text-[#067647]">{consolidatedReports.length}</div>
+          <div className="text-xs text-[#2E7D5B] mt-1">Already consolidated</div>
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-white border border-[#E4E7EC] rounded-xl p-4 shadow-sm">
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold text-gray-700">
-            {selectedIds.length} of {reports.length} Reports Selected ({totalItemsSelected} Activities)
+            {selectedPendingIds.length} of {pendingReports.length} Reports Selected ({totalItemsSelected} Activities)
           </span>
           <span className="text-gray-300">·</span>
           <button
             type="button"
             onClick={() => selectAll(true)}
-            className="text-xs text-indigo-600 hover:underline font-medium"
+            className="text-xs text-[#1B2340] hover:text-[#C9962C] hover:underline font-medium"
           >
             Select All
           </button>
@@ -207,25 +226,26 @@ export default function AdminConsolidationCenter() {
 
         <button
           type="button"
-          disabled={selectedIds.length === 0}
+          disabled={selectedPendingIds.length === 0}
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-[#4338CA] hover:bg-[#3730A3] disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-lg shadow-sm transition-all cursor-pointer"
+          className="flex items-center gap-2 bg-gradient-to-r from-[#C9962C] to-[#E0B563] hover:brightness-105 disabled:opacity-50 text-[#1B2340] text-xs font-semibold px-5 py-2.5 rounded-lg shadow-sm transition-all cursor-pointer"
         >
-          <Layers size={14} /> Consolidate into Master Report ({selectedIds.length})
+          <Layers size={14} /> Consolidate into Master Report ({selectedPendingIds.length})
         </button>
       </div>
 
       {/* Coordinator Reports Table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+      <div className="bg-white border border-[#E4E7EC] rounded-xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[980px] text-sm">
+          <thead className="bg-[#F8F9FB] text-left text-[11px] uppercase tracking-wide text-[#667085]">
             <tr>
               <th className="px-4 py-3 w-10">
                 <input
                   type="checkbox"
-                  checked={reports.length > 0 && selectedIds.length === reports.length}
+                  checked={pendingReports.length > 0 && pendingReports.every((report) => selectedPendingIds.includes(report._id))}
                   onChange={(e) => selectAll(e.target.checked)}
-                  className="rounded border-gray-300 text-[#4338CA] focus:ring-[#4338CA] h-4 w-4 cursor-pointer"
+                  className="rounded border-gray-300 text-[#1B2340] focus:ring-[#C9962C] h-4 w-4 cursor-pointer"
                 />
               </th>
               <th className="px-4 py-3">Report & Cluster</th>
@@ -234,7 +254,7 @@ export default function AdminConsolidationCenter() {
               <th className="px-4 py-3">Curated Activities</th>
               <th className="px-4 py-3">Date Submitted</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 text-right">Actions</th>
+              <th className="sticky right-0 z-20 min-w-[210px] bg-[#F8F9FB] px-4 py-3 text-right shadow-[-4px_0_8px_-6px_rgba(16,24,40,0.25)]">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -253,12 +273,12 @@ export default function AdminConsolidationCenter() {
               </tr>
             ) : (
               reports.map((report) => {
-                const isSelected = selectedIds.includes(report._id)
+                const isSelected = selectedPendingIds.includes(report._id)
                 return (
                   <tr
                     key={report._id}
-                    className={`border-t border-gray-100 hover:bg-gray-50 transition-colors ${
-                      isSelected ? 'bg-indigo-50/30' : ''
+                    className={`group border-t border-[#EAECF0] hover:bg-[#FAFBFC] transition-colors ${
+                      isSelected ? 'bg-[#FBF3E7]/60' : ''
                     }`}
                   >
                     <td className="px-4 py-3 align-middle">
@@ -266,12 +286,13 @@ export default function AdminConsolidationCenter() {
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleSelect(report._id)}
-                        className="rounded border-gray-300 text-[#4338CA] focus:ring-[#4338CA] h-4 w-4 cursor-pointer"
+                        disabled={report.status !== 'SUBMITTED_TO_ADMIN'}
+                        className="rounded border-gray-300 text-[#1B2340] focus:ring-[#C9962C] h-4 w-4 cursor-pointer"
                       />
                     </td>
                     <td className="px-4 py-3 align-middle">
                       <div className="font-semibold text-gray-900">{report.name}</div>
-                      <div className="text-xs text-indigo-600 font-medium">
+                      <div className="text-xs text-[#9A6B17] font-medium">
                         Cluster: {report.cluster || 'General'}
                       </div>
                     </td>
@@ -296,21 +317,45 @@ export default function AdminConsolidationCenter() {
                       <span
                         className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                           report.status === 'CONSOLIDATED'
-                            ? 'bg-purple-100 text-purple-700'
+                            ? 'bg-[#ECFDF3] text-[#067647]'
                             : 'bg-amber-100 text-amber-700'
                         }`}
                       >
                         {report.status === 'CONSOLIDATED' ? 'Consolidated' : 'Submitted'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-middle text-right">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewReport(report)}
-                        className="text-xs font-semibold text-[#4338CA] hover:underline cursor-pointer"
-                      >
-                        Preview
-                      </button>
+                    <td className="sticky right-0 z-10 min-w-[210px] bg-white px-4 py-3 align-middle text-right shadow-[-4px_0_8px_-6px_rgba(16,24,40,0.25)] group-hover:bg-[#FAFBFC]">
+                      <div className="flex flex-col items-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewReport(report)}
+                          className="text-xs font-semibold text-[#1B2340] hover:text-[#C9962C] hover:underline cursor-pointer"
+                        >
+                          Preview
+                        </button>
+                        {report.status === 'CONSOLIDATED' && report.consolidatedReportId && (
+                          <button
+                            type="button"
+                            onClick={() => openNewsletterDraft(report)}
+                            disabled={
+                              creatingNewsletterFor === report._id ||
+                              report.consolidatedReportId.summary?.totalItems === 0
+                            }
+                            title={
+                              report.consolidatedReportId.summary?.totalItems === 0
+                                ? 'This report has no curated activities'
+                                : undefined
+                            }
+                            className="text-xs font-semibold text-[#9A6B17] hover:text-[#1B2340] hover:underline disabled:opacity-50"
+                          >
+                            {creatingNewsletterFor === report._id
+                              ? 'Preparing draft…'
+                              : report.consolidatedReportId.summary?.totalItems === 0
+                              ? 'No curated content'
+                              : 'Create / open newsletter draft'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -318,6 +363,7 @@ export default function AdminConsolidationCenter() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Preview Modal for a Coordinator Report */}
@@ -344,7 +390,7 @@ export default function AdminConsolidationCenter() {
             </div>
 
             {previewReport.coordinatorComments && (
-              <div className="bg-indigo-50/60 border border-indigo-100 rounded-lg p-3 text-xs text-gray-700">
+              <div className="bg-[#FBF3E7]/60 border border-[#F4DBA3] rounded-lg p-3 text-xs text-gray-700">
                 <strong>Coordinator Comments:</strong> {previewReport.coordinatorComments}
               </div>
             )}
@@ -353,7 +399,7 @@ export default function AdminConsolidationCenter() {
               {(previewReport.curatedItems || []).map((it, idx) => (
                 <div key={idx} className="border border-gray-200 rounded-lg p-3 text-xs space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold uppercase tracking-wider text-[#4338CA] text-[10px] bg-indigo-50 px-2 py-0.5 rounded">
+                    <span className="font-bold uppercase tracking-wider text-[#1B2340] text-[10px] bg-[#F2F4F7] px-2 py-0.5 rounded">
                       {it.type}
                     </span>
                     <span className="text-gray-400">{new Date(it.date).toLocaleDateString()}</span>
@@ -373,7 +419,7 @@ export default function AdminConsolidationCenter() {
                       href={it.certificateUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-indigo-600 hover:underline inline-block mt-1 font-medium"
+                      className="text-[#1B2340] hover:text-[#C9962C] hover:underline inline-block mt-1 font-medium"
                     >
                       View Certificate / Paper
                     </a>
@@ -395,7 +441,7 @@ export default function AdminConsolidationCenter() {
               </h2>
               <p className="text-xs text-gray-500 mt-1">
                 You are consolidating <strong className="text-gray-900">{selectedIds.length} coordinator reports</strong> containing{' '}
-                <strong className="text-[#4338CA]">{totalItemsSelected} activities</strong> into the
+                <strong className="text-[#1B2340]">{totalItemsSelected} activities</strong> into the
                 single master institutional newsletter report.
               </p>
             </div>
@@ -410,7 +456,7 @@ export default function AdminConsolidationCenter() {
                   required
                   value={masterName}
                   onChange={(e) => setMasterName(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30"
+                  className="w-full border border-[#D0D5DD] rounded-lg px-3 py-2.5 text-sm text-[#1B2340] focus:outline-none focus:ring-2 focus:ring-[#C9962C]/30 focus:border-[#C9962C]"
                 />
               </div>
 
@@ -423,7 +469,7 @@ export default function AdminConsolidationCenter() {
                   value={adminNotes}
                   onChange={(e) => setAdminNotes(e.target.value)}
                   placeholder="e.g. Master compilation approved for Institute Newsletter Volume X, Issue Y."
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30"
+                  className="w-full border border-[#D0D5DD] rounded-lg px-3 py-2.5 text-sm text-[#1B2340] focus:outline-none focus:ring-2 focus:ring-[#C9962C]/30 focus:border-[#C9962C]"
                 />
               </div>
 
@@ -438,7 +484,7 @@ export default function AdminConsolidationCenter() {
                 <button
                   type="submit"
                   disabled={consolidating}
-                  className="px-5 py-2 text-xs font-bold text-white bg-[#4338CA] hover:bg-[#3730A3] rounded-md transition-colors disabled:opacity-50"
+                  className="px-5 py-2.5 text-sm font-semibold text-[#1B2340] bg-gradient-to-r from-[#C9962C] to-[#E0B563] hover:brightness-105 rounded-lg transition-all disabled:opacity-50"
                 >
                   {consolidating ? 'Consolidating…' : 'Generate Master Institutional Report'}
                 </button>
@@ -477,4 +523,3 @@ export default function AdminConsolidationCenter() {
     </div>
   )
 }
-

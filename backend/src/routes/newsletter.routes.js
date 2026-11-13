@@ -15,6 +15,13 @@ router.post(
   newsletterController.generateNewsletter
 );
 
+router.post(
+  '/from-consolidated-report',
+  authenticate,
+  authorize('SUPER_ADMIN'),
+  newsletterController.generateFromConsolidatedReport
+);
+
 // Everyone signed in can list; the controller limits what each role sees.
 router.get('/', authenticate, newsletterController.getAllNewsletters);
 

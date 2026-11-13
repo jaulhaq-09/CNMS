@@ -37,7 +37,6 @@ export default function UserManagementPage() {
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState({ total: 0, pages: 1 })
   const [roleFilter, setRoleFilter] = useState('')
-  const [departmentFilter, setDepartmentFilter] = useState('')
 
   const [saving, setSaving] = useState(false)
 
@@ -45,28 +44,7 @@ export default function UserManagementPage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [showImport, setShowImport] = useState(false)
-  const [resendingId, setResendingId] = useState(null)
   const [summary, setSummary] = useState(null)
-
-  // "Faculty" button on a Coordinator row: who works under this coordinator
-  const [teamFor, setTeamFor] = useState(null)
-  const [team, setTeam] = useState([])
-  const [teamLoading, setTeamLoading] = useState(false)
-
-  const openTeam = async (user) => {
-    setTeamFor(user)
-    setTeam([])
-    setTeamLoading(true)
-    try {
-      const res = await userService.getTeam(user._id)
-      setTeam(res.data?.members || [])
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not load the faculty list')
-      setTeamFor(null)
-    } finally {
-      setTeamLoading(false)
-    }
-  }
 
   const loadSummary = async () => {
     try {
@@ -156,18 +134,6 @@ export default function UserManagementPage() {
     }
   }
 
-  const handleResend = async (user) => {
-    try {
-      setResendingId(user._id)
-      const res = await userService.resendCredentials(user._id)
-      toast.success(res.message || 'Credentials sent')
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not resend credentials')
-    } finally {
-      setResendingId(null)
-    }
-  }
-
   useEffect(() => {
     loadUsers(search, 1)
     loadDepartments()
@@ -181,7 +147,6 @@ export default function UserManagementPage() {
       const filters = {}
       if (searchTerm) filters.search = searchTerm
       if (roleFilter) filters.role = roleFilter
-      if (departmentFilter) filters.department = departmentFilter
       const response = await userService.getAll(filters, pageNum)
       setUsers(response.data)
       setPagination({
@@ -218,7 +183,7 @@ export default function UserManagementPage() {
   useEffect(() => {
     loadUsers(search, 1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roleFilter, departmentFilter])
+  }, [roleFilter])
 
   const handleSearchSubmit = (e) => {
     e.preventDefault()
@@ -317,118 +282,132 @@ export default function UserManagementPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">User management</h1>
-        <p className="text-sm text-gray-500 mt-1">Every login in the system, with who it belongs to.</p>
-      </div>
-
       {error && (
         <div className="mb-4 px-4 py-3 rounded-md bg-red-50 text-red-700 text-sm border border-red-200">
           {error}
         </div>
       )}
 
-      {/* Add User Card (Matches Screenshot 2) */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-gray-800">Add user</h2>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowImport(true)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-            >
-              Import from Excel
-            </button>
+      <section aria-labelledby="add-user-heading" className="bg-white border border-[#E4E7EC] rounded-xl p-5 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="add-user-heading" className="text-base font-semibold text-[#1B2340]">Add user</h2>
+            <p className="text-sm text-[#667085] mt-0.5">Create an account and assign its role and department.</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowImport(true)}
+            className="text-sm font-semibold px-3.5 py-2 rounded-md border border-[#1B2340]/20 text-[#1B2340] hover:bg-[#1B2340]/5 transition-colors cursor-pointer"
+          >
+            Import from Excel
+          </button>
         </div>
 
-        <form onSubmit={handleQuickAddSubmit} className="flex flex-wrap items-center gap-3">
-          <input
-            name="username"
-            aria-label="Username"
-            required
-            value={quickForm.username}
-            onChange={(e) => setQuickForm((prev) => ({ ...prev, username: e.target.value }))}
-            placeholder="Username"
-            className="flex-1 min-w-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30"
-          />
-          <input
-            name="email"
-            aria-label="Email"
-            type="email"
-            required
-            value={quickForm.email}
-            onChange={(e) => setQuickForm((prev) => ({ ...prev, email: e.target.value }))}
-            placeholder="Email"
-            className="flex-1 min-w-[180px] border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30"
-          />
-          <input
-            name="password"
-            aria-label="Password"
-            type="password"
-            required
-            minLength={6}
-            value={quickForm.password}
-            onChange={(e) => setQuickForm((prev) => ({ ...prev, password: e.target.value }))}
-            placeholder="Password"
-            className="flex-1 min-w-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30"
-          />
-          <select
-            name="role"
-            aria-label="Role"
-            required
-            value={quickForm.role}
-            onChange={(e) => setQuickForm((prev) => ({ ...prev, role: e.target.value }))}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white min-w-[150px] font-medium"
-          >
-            <option value="" disabled>Select role</option>
-            <option value="COORDINATOR">COORDINATOR</option>
-            <option value="SUPER_ADMIN">ADMIN</option>
-            <option value="FACULTY">FACULTY</option>
-            <option value="GUEST">GUEST</option>
-          </select>
-          <select
-            name="department"
-            aria-label="Department"
-            required
-            value={quickForm.department}
-            onChange={(e) => setQuickForm((prev) => ({
-              ...prev,
-              department: e.target.value,
-              clusters: [],
-            }))}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white min-w-[180px]"
-          >
-            <option value="" disabled>Select department</option>
-            {departments.map((department) => (
-              <option key={department._id} value={department._id}>{department.name}</option>
-            ))}
-          </select>
-          {quickForm.role === 'COORDINATOR' && (
-            <ChecklistCell
-              values={quickForm.clusters}
-              options={clustersByDepartment[quickForm.department] || []}
-              disabled={!quickForm.department || !(clustersByDepartment[quickForm.department] || []).length}
-              title="Choose one or more clusters"
-              onSave={(clusters) => setQuickForm((prev) => ({ ...prev, clusters }))}
+        <form onSubmit={handleQuickAddSubmit} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <label htmlFor="quick-username" className="space-y-1 text-xs font-medium text-[#475467]">
+            Username
+            <input
+              id="quick-username"
+              name="username"
+              required
+              value={quickForm.username}
+              onChange={(e) => setQuickForm((prev) => ({ ...prev, username: e.target.value }))}
+              placeholder="Enter username"
+              className="w-full border border-[#D0D5DD] rounded-md px-3 py-2 text-sm text-[#1B2340] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#C9962C]/30 focus:border-[#C9962C]"
+            />
+          </label>
+          <label htmlFor="quick-email" className="space-y-1 text-xs font-medium text-[#475467]">
+            Email
+            <input
+              id="quick-email"
+              name="email"
+              type="email"
+              required
+              value={quickForm.email}
+              onChange={(e) => setQuickForm((prev) => ({ ...prev, email: e.target.value }))}
+              placeholder="name@college.edu"
+              className="w-full border border-[#D0D5DD] rounded-md px-3 py-2 text-sm text-[#1B2340] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#C9962C]/30 focus:border-[#C9962C]"
+            />
+          </label>
+          <label htmlFor="quick-password" className="space-y-1 text-xs font-medium text-[#475467]">
+            Password
+            <input
+              id="quick-password"
+              name="password"
+              type="password"
+              required
+              minLength={6}
+              value={quickForm.password}
+              onChange={(e) => setQuickForm((prev) => ({ ...prev, password: e.target.value }))}
+              placeholder="At least 6 characters"
+              className="w-full border border-[#D0D5DD] rounded-md px-3 py-2 text-sm text-[#1B2340] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#C9962C]/30 focus:border-[#C9962C]"
+            />
+          </label>
+          <label htmlFor="quick-role" className="space-y-1 text-xs font-medium text-[#475467]">
+            Role
+            <select
+              id="quick-role"
+              name="role"
+              required
+              value={quickForm.role}
+              onChange={(e) => setQuickForm((prev) => ({ ...prev, role: e.target.value }))}
+              className="w-full border border-[#D0D5DD] rounded-md px-3 py-2 text-sm bg-white text-[#1B2340] font-medium focus:outline-none focus:ring-2 focus:ring-[#C9962C]/30 focus:border-[#C9962C]"
             >
-              <span className="text-sm text-gray-700">
-                {quickForm.clusters.length ? quickForm.clusters.join(', ') : 'Select clusters'}
-              </span>
-            </ChecklistCell>
+              <option value="" disabled>Select role</option>
+              <option value="COORDINATOR">COORDINATOR</option>
+              <option value="SUPER_ADMIN">ADMIN</option>
+              <option value="FACULTY">FACULTY</option>
+              <option value="GUEST">GUEST</option>
+            </select>
+          </label>
+          <label htmlFor="quick-department" className="space-y-1 text-xs font-medium text-[#475467]">
+            Department
+            <select
+              id="quick-department"
+              name="department"
+              required
+              value={quickForm.department}
+              onChange={(e) => setQuickForm((prev) => ({
+                ...prev,
+                department: e.target.value,
+                clusters: [],
+              }))}
+              className="w-full border border-[#D0D5DD] rounded-md px-3 py-2 text-sm bg-white text-[#1B2340] focus:outline-none focus:ring-2 focus:ring-[#C9962C]/30 focus:border-[#C9962C]"
+            >
+              <option value="" disabled>Select department</option>
+              {departments.map((department) => (
+                <option key={department._id} value={department._id}>{department.name}</option>
+              ))}
+            </select>
+          </label>
+          {quickForm.role === 'COORDINATOR' && (
+            <div className="space-y-1 text-xs font-medium text-[#475467]">
+              <span>Clusters</span>
+              <div className="min-h-10 rounded-md border border-[#D0D5DD] flex items-center">
+                <ChecklistCell
+                  values={quickForm.clusters}
+                  options={clustersByDepartment[quickForm.department] || []}
+                  disabled={!quickForm.department || !(clustersByDepartment[quickForm.department] || []).length}
+                  title="Choose one or more clusters"
+                  onSave={(clusters) => setQuickForm((prev) => ({ ...prev, clusters }))}
+                >
+                  <span className="text-sm text-[#475467]">
+                    {quickForm.clusters.length ? quickForm.clusters.join(', ') : 'Select clusters'}
+                  </span>
+                </ChecklistCell>
+              </div>
+            </div>
           )}
           <button
             type="submit"
             disabled={saving}
-            className="bg-[#4338CA] hover:bg-[#3730A3] text-white text-sm font-semibold px-6 py-2 rounded-md shadow-sm transition-all disabled:opacity-60 cursor-pointer"
+            className="w-full bg-gradient-to-r from-[#C9962C] to-[#E0B563] hover:brightness-105 text-[#1B2340] text-sm font-semibold px-6 py-2 rounded-md shadow-sm transition-all disabled:opacity-60 cursor-pointer"
           >
             {saving ? 'Adding…' : 'Add user'}
           </button>
         </form>
-      </div>
+      </section>
 
-      {/* Filter Tabs and Search Bar (Matches Screenshot 2) */}
       <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
         <div className="flex flex-wrap items-center gap-2">
           {FILTER_TABS.map((tab) => {
@@ -443,8 +422,8 @@ export default function UserManagementPage() {
                 onClick={() => setRoleFilter(tab.filterRole)}
                 className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                   active
-                    ? 'bg-[#3b34c7] text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-[#1B2340] text-white shadow-sm'
+                    : 'bg-white border border-[#E4E7EC] text-[#475467] hover:bg-[#F5F6F8]'
                 }`}
               >
                 {tab.label} ({count})
@@ -458,37 +437,42 @@ export default function UserManagementPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or email..."
-            className="flex-1 min-w-[200px] border border-gray-300 rounded-md px-3.5 py-1.5 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30"
+            className="flex-1 min-w-[200px] border border-[#D0D5DD] rounded-md px-3.5 py-2 text-sm text-[#1B2340] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#C9962C]/30 focus:border-[#C9962C]"
           />
           <button
             type="submit"
-            className="text-xs font-semibold px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+            className="text-sm font-semibold px-4 py-2 rounded-md border border-[#E4E7EC] text-[#475467] hover:bg-[#F5F6F8] transition-colors cursor-pointer"
           >
             Search
           </button>
         </form>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+      <p className="text-xs text-[#667085]">
+        Select a cell to edit it. On narrow screens, swipe the table horizontally; name and actions stay in view.
+      </p>
+
+      <div className="bg-white border border-[#E4E7EC] rounded-xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[1020px] text-sm">
+          <thead className="bg-[#F8F9FB] text-left text-[11px] uppercase tracking-wide text-[#667085]">
             <tr>
-              <th className="px-4 py-3">NAME</th>
+              <th className="sticky left-0 z-20 min-w-[170px] bg-[#F8F9FB] px-4 py-3 shadow-[4px_0_8px_-6px_rgba(16,24,40,0.25)]">NAME</th>
               <th className="px-4 py-3">USERNAME</th>
               <th className="px-4 py-3">EMAIL</th>
               <th className="px-4 py-3">DEPARTMENT</th>
               <th className="px-4 py-3">CLUSTERS</th>
               <th className="px-4 py-3">ROLES</th>
               <th className="px-4 py-3">STATUS</th>
-              <th className="px-4 py-3 text-right">ACTIONS</th>
+              <th className="sticky right-0 z-20 min-w-[100px] bg-[#F8F9FB] px-4 py-3 text-right shadow-[-4px_0_8px_-6px_rgba(16,24,40,0.25)]">ACTIONS</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               [1, 2, 3].map((i) => (
-                <tr key={i} className="border-t border-gray-100">
+                <tr key={i} className="border-t border-[#EAECF0]">
                   <td colSpan={8} className="px-4 py-4">
-                    <div className="h-3.5 w-1/3 bg-gray-100 rounded animate-pulse" />
+                    <div className="h-3.5 w-1/3 bg-[#F2F4F7] rounded animate-pulse" />
                   </td>
                 </tr>
               ))
@@ -500,8 +484,8 @@ export default function UserManagementPage() {
               </tr>
             ) : (
               users.map((user) => (
-                <tr key={user._id} className="border-t border-gray-100 hover:bg-[#F5F6F8] transition-colors">
-                  <td className="px-4 py-3 align-top font-medium text-[#1B2340]">
+                <tr key={user._id} className="group border-t border-[#EAECF0] hover:bg-[#FAFBFC] transition-colors">
+                  <td className="sticky left-0 z-10 min-w-[170px] bg-white px-4 py-3 align-top font-medium text-[#1B2340] shadow-[4px_0_8px_-6px_rgba(16,24,40,0.25)] group-hover:bg-[#FAFBFC]">
                     <TextCell
                       value={`${user.firstName || ''} ${user.lastName || ''}`.trim()}
                       onSave={(name) => saveDetails(user, { name })}
@@ -510,9 +494,9 @@ export default function UserManagementPage() {
                         {user.firstName} {user.lastName}
                       </span>
                     </TextCell>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {user.designation || 'Faculty'}
-                    </div>
+                    {user.designation && (
+                      <div className="text-xs text-gray-500 mt-0.5">{user.designation}</div>
+                    )}
                   </td>
                   <td className="px-4 py-3 align-top text-xs font-mono text-gray-700">
                     <TextCell
@@ -603,25 +587,14 @@ export default function UserManagementPage() {
                       </span>
                     </SelectCell>
                   </td>
-                  <td className="px-4 py-3 align-top text-right">
+                  <td className="sticky right-0 z-10 min-w-[100px] bg-white px-4 py-3 align-top text-right shadow-[-4px_0_8px_-6px_rgba(16,24,40,0.25)] group-hover:bg-[#FAFBFC]">
                     <div className="flex items-center justify-end gap-3 text-xs font-medium">
-                      {(user.role === 'COORDINATOR' || (user.roles || []).includes('COORDINATOR')) && (
-                        <button
-                          type="button"
-                          onClick={() => openTeam(user)}
-                          className="text-[#1B2340] hover:underline cursor-pointer"
-                          title="See the faculty in this coordinator's clusters"
-                        >
-                          Faculty
-                        </button>
-                      )}
-                      {user._id === (currentUser?._id || currentUser?.id) ? (
-                        <span className="text-gray-400">Your account</span>
-                      ) : (
+                      {user._id !== (currentUser?._id || currentUser?.id) && (
                         <button
                           type="button"
                           onClick={() => setDeleteTarget(user)}
-                          className="text-red-600 hover:underline cursor-pointer"
+                          className="rounded-md px-2.5 py-1.5 text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 cursor-pointer"
+                          aria-label={`Delete ${user.firstName} ${user.lastName}`}
                         >
                           Delete
                         </button>
@@ -633,6 +606,7 @@ export default function UserManagementPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {deleteTarget &&
@@ -681,84 +655,6 @@ export default function UserManagementPage() {
                   className="px-4 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60"
                 >
                   {deleteBusy ? 'Working…' : 'Delete permanently'}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-      {teamFor &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-[#101828]/40" onClick={() => setTeamFor(null)} />
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-              <div className="px-6 pt-5 pb-3 border-b border-gray-100">
-                <h3 className="font-serif font-semibold text-lg text-[#1B2340]">
-                  Faculty under {teamFor.firstName} {teamFor.lastName}
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  {teamFor.department?.name || 'No department'} ·{' '}
-                  {(teamFor.clusters || []).join(', ') || 'no cluster'} · all sections
-                </p>
-              </div>
-
-              <div className="px-6 py-4 overflow-y-auto">
-                {teamLoading ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-4 bg-gray-100 rounded animate-pulse" />
-                    ))}
-                  </div>
-                ) : team.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-6">
-                    No faculty are assigned to this coordinator&apos;s clusters yet.
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-xs text-gray-400 mb-2">
-                      {team.length} {team.length === 1 ? 'faculty member' : 'faculty members'}
-                    </p>
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-xs uppercase text-gray-500">
-                        <tr>
-                          <th className="py-2 pr-3">Name</th>
-                          <th className="py-2 pr-3">Email</th>
-                          <th className="py-2 pr-3">Cluster</th>
-                          <th className="py-2 pr-3">Section</th>
-                          <th className="py-2">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {team.map((m) => (
-                          <tr key={m._id} className="border-t border-gray-100">
-                            <td className="py-2 pr-3 font-medium text-[#1B2340]">
-                              {m.firstName} {m.lastName}
-                            </td>
-                            <td className="py-2 pr-3">{m.email}</td>
-                            <td className="py-2 pr-3">{(m.sharedClusters || []).join(', ') || '—'}</td>
-                            <td className="py-2 pr-3">{(m.sections || []).join(', ') || '—'}</td>
-                            <td className="py-2">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
-                                  }`}
-                              >
-                                {m.isActive ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </>
-                )}
-              </div>
-
-              <div className="px-6 py-3 border-t border-gray-100 flex justify-end">
-                <button
-                  onClick={() => setTeamFor(null)}
-                  className="px-4 py-2 rounded-md border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
-                >
-                  Close
                 </button>
               </div>
             </div>

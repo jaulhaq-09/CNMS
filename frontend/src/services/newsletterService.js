@@ -10,6 +10,14 @@ const newsletterService = {
     return response.data;
   },
 
+  generateFromConsolidatedReport: async (reportId, templateId) => {
+    const response = await api.post('/api/newsletters/from-consolidated-report', {
+      reportId,
+      templateId,
+    });
+    return response.data;
+  },
+
   getAll: async (filters = {}, page = 1, limit = 10) => {
     const params = new URLSearchParams({
       page,

@@ -306,7 +306,7 @@ export default function TemplatePreview({ blocks = [], pageLabel }) {
     }
 
     return (
-        <div className="bg-white border border-[#E4E7EC] rounded-lg p-4 sticky top-4">
+        <div className="bg-white border border-[#E4E7EC] rounded-lg p-4 2xl:sticky 2xl:top-4">
             <div className="flex items-center justify-between mb-3">
                 <p className="text-[11px] uppercase tracking-[0.15em] text-[#667085] font-semibold">
                     Live Preview

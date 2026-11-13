@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useSelector } from 'react-redux'
 import ExportCenter from '../components/ExportCenter'
 import ReportBuilder from '../components/ReportBuilder'
@@ -9,21 +9,24 @@ import AdminConsolidationCenter from '../components/report/AdminConsolidationCen
 import reportService from '../services/reportService'
 import usePermissions from '../hooks/usePermissions'
 import { PERMISSIONS } from '../config/permissions'
+import PageHeader from '../components/common/PageHeader'
 
 export default function ReportPage() {
   const { can } = usePermissions()
   const canExport = can(PERMISSIONS.EXPORT_VIEW)
   const currentUser = useSelector((state) => state.auth?.user)
 
-  const isCoordinator =
-    currentUser?.role === 'COORDINATOR' || (currentUser?.roles || []).includes('COORDINATOR')
-  const isAdmin =
-    currentUser?.role === 'SUPER_ADMIN' || (currentUser?.roles || []).includes('SUPER_ADMIN')
+  const isAdmin = currentUser?.role
+    ? currentUser.role === 'SUPER_ADMIN'
+    : (currentUser?.roles || []).includes('SUPER_ADMIN')
+  const isCoordinator = currentUser?.role
+    ? currentUser.role === 'COORDINATOR'
+    : (currentUser?.roles || []).includes('COORDINATOR')
 
-  const initialView = isCoordinator
-    ? 'cluster-report'
-    : isAdmin
+  const initialView = isAdmin
     ? 'consolidation'
+    : isCoordinator
+    ? 'cluster-report'
     : canExport
     ? 'export'
     : 'builder'
@@ -31,27 +34,28 @@ export default function ReportPage() {
   const [reports, setReports] = useState([])
   const [view, setView] = useState(initialView)
   const [loading, setLoading] = useState(false)
+  const [reportsError, setReportsError] = useState('')
 
-  useEffect(() => {
-    loadReports()
-  }, [])
-
-  const loadReports = async () => {
+  const loadReports = useCallback(async () => {
     try {
       setLoading(true)
+      setReportsError('')
       const response = await reportService.getAll(1, 20)
       setReports(response.data)
     } catch (error) {
       console.error('Failed to load reports:', error)
+      setReportsError(error.response?.data?.message || 'Could not load your reports.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (view === 'list' || view === 'scheduler') loadReports()
+  }, [view, loadReports])
 
   const tabs = [
-    ...(isCoordinator || isAdmin
-      ? [{ id: 'cluster-report', label: 'Cluster Monthly Report' }]
-      : []),
+    ...(isCoordinator ? [{ id: 'cluster-report', label: 'Cluster Monthly Report' }] : []),
     ...(isAdmin ? [{ id: 'consolidation', label: 'Consolidation Center' }] : []),
     ...(canExport ? [{ id: 'export', label: 'Quick Export' }] : []),
     { id: 'builder', label: 'Build Report' },
@@ -61,6 +65,12 @@ export default function ReportPage() {
 
   return (
     <div className="space-y-6">
+      {!isAdmin && (
+        <PageHeader
+          title="Reports"
+          description="Build, review, export, and schedule reports for your role and department."
+        />
+      )}
       <nav className="flex flex-wrap gap-2">
         {tabs.map((tab) => (
           <button
@@ -76,6 +86,12 @@ export default function ReportPage() {
           </button>
         ))}
       </nav>
+
+      {reportsError && (view === 'list' || view === 'scheduler') && (
+        <div role="alert" className="rounded-lg border border-[#FECDCA] bg-[#FEF3F2] px-4 py-3 text-sm text-[#B42318]">
+          {reportsError}
+        </div>
+      )}
 
       {view === 'cluster-report' && <CoordinatorClusterReport />}
       {view === 'consolidation' && isAdmin && <AdminConsolidationCenter />}

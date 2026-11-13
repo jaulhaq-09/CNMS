@@ -24,6 +24,7 @@ import PublicationForm from '../components/publications/PublicationForm'
 import PatentEntryForm from '../components/patents/PatentEntryForm'
 import SimpleStepForm, { EMPTY_SIMPLE, simpleProblem, todayISO } from '../components/report/SimpleStepForm'
 import { compressAll } from '../utils/compressImage'
+import PageHeader from '../components/common/PageHeader'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const draftKey = (id) => `cnms_mpr_draft_${id || 'anon'}`
@@ -336,10 +337,10 @@ export default function MonthlyReportPage() {
         <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-[#667085] hover:text-[#C9962C] transition-colors">
           ← Back to Dashboard
         </Link>
-        <div>
-          <h2 className="font-serif font-semibold text-2xl text-[#1B2340]">Before you start</h2>
-          <p className="text-sm text-[#667085] mt-1">Which cluster and section is this report for?</p>
-        </div>
+        <PageHeader
+          title="Before you start"
+          description="Choose the cluster and section this report is for."
+        />
         <div className="bg-white border border-[#E4E7EC] rounded-lg p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {scope.clusters.length > 1 && (
@@ -386,7 +387,7 @@ export default function MonthlyReportPage() {
     return (
       <div className="bg-white border border-[#E4E7EC] rounded-lg p-10 text-center space-y-3">
         <CheckCircle2 size={40} className="mx-auto text-[#2E7D5B]" />
-        <h2 className="font-serif font-semibold text-2xl text-[#1B2340]">Report submitted</h2>
+        <h1 className="font-serif font-semibold text-2xl text-[#1B2340]">Report submitted</h1>
         <p className="text-sm text-[#667085] max-w-md mx-auto">
           {sentCount} item{sentCount === 1 ? '' : 's'} sent to your coordinator for review.
         </p>
@@ -782,7 +783,7 @@ export default function MonthlyReportPage() {
             <p className="text-[11px] uppercase tracking-[0.2em] text-[#F0A8A0] font-semibold">
               Monthly Progress Report · {month}
             </p>
-            <h2 className="font-serif font-semibold text-2xl mt-1">Report this month&apos;s activities</h2>
+            <h1 className="font-serif font-semibold text-2xl mt-1">Report this month&apos;s activities</h1>
             <p className="text-sm text-white/65 mt-1 max-w-xl">
               Answer each section or mark it NIL. Review everything on the last screen — nothing is sent
               until you submit.

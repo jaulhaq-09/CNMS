@@ -197,37 +197,37 @@ export default function CoordinatorClusterReport() {
           message="Your in-progress activity selections and coordinator notes were automatically restored from your previous session."
         />
       )}
-      {/* Standard Institutional Header (Configured by Admin) */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-gray-100 pb-5">
+      {/* Cluster report header and controls */}
+      <div className="bg-white border border-[#E4E7EC] rounded-2xl p-4 sm:p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-[#EAECF0] pb-5">
           <div className="flex items-center gap-4">
             <img
               src={collegeLogo}
               alt="BMSIT Logo"
-              className="w-14 h-14 rounded-full object-cover border border-[#4338CA]/20"
+              className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border border-[#C9962C]/30"
             />
             <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-[#4338CA]">
-                Standard College Template (Fixed by Admin)
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8F6317]">
+                Coordinator workspace
               </div>
-              <h1 className="text-xl font-bold text-gray-900 mt-0.5">
+              <h2 className="text-xl font-semibold text-[#1B2340] mt-0.5">
                 Cluster Faculty Activity Report
-              </h1>
-              <p className="text-xs text-gray-500">
+              </h2>
+              <p className="text-sm text-[#667085] mt-1">
                 Department: {currentUser?.department?.name || 'Department'} · Coordinator:{' '}
                 {currentUser?.firstName} {currentUser?.lastName}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             {userClusters.length > 1 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 font-medium">Cluster:</span>
+              <label className="flex items-center gap-2 text-xs text-[#667085] font-medium">
+                <span>Cluster</span>
                 <select
                   value={selectedCluster}
                   onChange={(e) => setSelectedCluster(e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-1.5 text-xs bg-white font-medium"
+                  className="border border-[#D0D5DD] rounded-lg px-3 py-2 text-sm bg-white font-medium text-[#1B2340] focus:outline-none focus:ring-2 focus:ring-[#C9962C]/40"
                 >
                   {userClusters.map((c) => (
                     <option key={c} value={c}>
@@ -235,19 +235,29 @@ export default function CoordinatorClusterReport() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </label>
+            )}
+            {userClusters.length === 1 && (
+              <span className="rounded-lg bg-[#FBF3E7] px-3 py-2 text-sm font-semibold text-[#8F6317]">
+                {userClusters[0]}
+              </span>
+            )}
+            {userClusters.length === 0 && (
+              <span className="rounded-lg bg-[#F2F4F7] px-3 py-2 text-sm text-[#667085]">
+                No cluster assigned
+              </span>
             )}
             <button
               type="button"
               onClick={() => setShowHistory((v) => !v)}
-              className="text-xs font-semibold px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D0D5DD] text-[#344054] hover:bg-[#F9FAFB] transition-colors"
             >
               {showHistory ? 'Hide Submissions' : `Forwarded Submissions (${previousReports.length})`}
             </button>
             <button
               type="button"
               onClick={() => window.print()}
-              className="text-xs font-semibold px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D0D5DD] text-[#344054] hover:bg-[#F9FAFB] transition-colors flex items-center gap-1.5"
             >
               <Printer size={14} /> Print
             </button>
@@ -255,20 +265,19 @@ export default function CoordinatorClusterReport() {
         </div>
 
         {/* Curation and Forward Action Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-5">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-gray-500">
-              Approved Activities: <strong className="text-gray-900">{activities.length}</strong>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="text-sm text-[#667085]">
+              Approved activities <strong className="text-[#1B2340]">{activities.length}</strong>
             </span>
-            <span className="text-gray-300">|</span>
-            <span className="text-xs font-medium text-gray-500">
-              Selected to Keep: <strong className="text-[#4338CA]">{includedCount}</strong>
+            <span className="text-sm text-[#667085]">
+              Selected for report <strong className="text-[#8F6317]">{includedCount}</strong>
             </span>
-            <div className="flex items-center gap-2 ml-4">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => toggleAll(true)}
-                className="text-xs text-indigo-600 hover:underline font-medium"
+                className="text-xs text-[#8F6317] hover:underline font-semibold"
               >
                 Select All
               </button>
@@ -276,7 +285,7 @@ export default function CoordinatorClusterReport() {
               <button
                 type="button"
                 onClick={() => toggleAll(false)}
-                className="text-xs text-gray-500 hover:underline font-medium"
+                className="text-xs text-[#667085] hover:underline font-semibold"
               >
                 Deselect All
               </button>
@@ -287,7 +296,7 @@ export default function CoordinatorClusterReport() {
             type="button"
             disabled={includedCount === 0}
             onClick={() => setShowConfirmModal(true)}
-            className="flex items-center gap-2 bg-[#4338CA] hover:bg-[#3730A3] disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-lg shadow-sm transition-all cursor-pointer"
+            className="flex items-center justify-center gap-2 bg-[#1B2340] hover:bg-[#29345A] disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#C9962C] focus:ring-offset-2"
           >
             <Send size={14} /> Forward Report to Admin ({includedCount})
           </button>
@@ -296,27 +305,27 @@ export default function CoordinatorClusterReport() {
 
       {/* Previously Forwarded Reports History Card */}
       {showHistory && (
-        <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 space-y-3">
-          <h2 className="text-sm font-bold text-gray-800">Your Forwarded Cluster Reports</h2>
+        <div className="bg-[#FFFBF2] border border-[#F4DBA3] rounded-xl p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-[#1B2340]">Your forwarded cluster reports</h2>
           {previousReports.length === 0 ? (
             <p className="text-xs text-gray-500">No reports have been forwarded yet.</p>
           ) : (
             <div className="divide-y divide-gray-200">
               {previousReports.map((r) => (
-                <div key={r._id} className="py-2.5 flex items-center justify-between">
+                <div key={r._id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
-                    <div className="text-xs font-semibold text-gray-900">{r.name}</div>
-                    <div className="text-[11px] text-gray-500">
+                    <div className="text-sm font-semibold text-[#1B2340]">{r.name}</div>
+                    <div className="text-xs text-[#667085]">
                       Cluster: {r.cluster || 'General'} · Forwarded:{' '}
                       {new Date(r.forwardedAt || r.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                      className={`text-[11px] font-semibold px-2 py-1 rounded-full ${
                         r.status === 'CONSOLIDATED'
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-amber-100 text-amber-700'
+                          ? 'bg-[#ECFDF3] text-[#067647]'
+                          : 'bg-[#FBF3E7] text-[#8F6317]'
                       }`}
                     >
                       {r.status === 'CONSOLIDATED' ? 'Consolidated by Admin' : 'Submitted to Admin'}
@@ -330,16 +339,17 @@ export default function CoordinatorClusterReport() {
       )}
 
       {/* Filter Tabs */}
-      <div className="flex gap-2 border-b border-gray-200 pb-1">
+      <div className="flex gap-2 overflow-x-auto border-b border-[#E4E7EC] pb-1" role="group" aria-label="Filter activities by category">
         {['ALL', 'EVENT', 'PUBLICATION', 'PATENT', 'ACHIEVEMENT', 'NPTEL'].map((cat) => (
           <button
             key={cat}
             type="button"
             onClick={() => setCategoryFilter(cat)}
+            aria-pressed={categoryFilter === cat}
             className={`px-3 py-1.5 rounded-t-md text-xs font-semibold transition-colors ${
               categoryFilter === cat
-                ? 'border-b-2 border-[#4338CA] text-[#4338CA]'
-                : 'text-gray-500 hover:text-gray-800'
+                ? 'border-b-2 border-[#C9962C] text-[#1B2340]'
+                : 'text-[#667085] hover:text-[#1B2340]'
             }`}
           >
             {cat}
@@ -349,9 +359,9 @@ export default function CoordinatorClusterReport() {
 
       {/* Curated Activity List */}
       {loading ? (
-        <div className="p-8 text-center text-sm text-gray-400">Loading approved activities…</div>
+        <div className="rounded-xl border border-[#E4E7EC] bg-white p-8 text-center text-sm text-[#667085]" role="status">Loading approved activities…</div>
       ) : filteredActivities.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">
+        <div className="bg-white border border-dashed border-[#D0D5DD] rounded-xl p-8 sm:p-10 text-center text-[#667085]">
           No approved activities found for this cluster. When faculty posts are accepted, they appear
           here for you to review and compile into the report.
         </div>
@@ -362,20 +372,21 @@ export default function CoordinatorClusterReport() {
               key={item.id}
               className={`bg-white border rounded-xl p-4 transition-all ${
                 item.included
-                  ? 'border-indigo-100 shadow-sm hover:border-indigo-200'
-                  : 'border-gray-200 opacity-60 bg-gray-50'
+                  ? 'border-[#E4E7EC] shadow-sm hover:border-[#C9962C]/60'
+                  : 'border-[#E4E7EC] opacity-60 bg-[#F9FAFB]'
               }`}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
                   <button
                     type="button"
                     onClick={() => toggleInclude(item.id)}
-                    className="mt-1 text-gray-400 hover:text-[#4338CA] transition-colors cursor-pointer"
+                    className="mt-1 text-[#98A2B3] hover:text-[#8F6317] transition-colors cursor-pointer"
                     title={item.included ? 'Click to exclude' : 'Click to include'}
+                    aria-label={`${item.included ? 'Exclude' : 'Include'} ${item.title} in report`}
                   >
                     {item.included ? (
-                      <CheckSquare size={20} className="text-[#4338CA]" />
+                      <CheckSquare size={20} className="text-[#8F6317]" />
                     ) : (
                       <Square size={20} />
                     )}
@@ -383,30 +394,30 @@ export default function CoordinatorClusterReport() {
 
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-[#4338CA]">
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#FBF3E7] text-[#8F6317]">
                         {item.type}
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-[#667085]">
                         {new Date(item.date).toLocaleDateString()}
                       </span>
                     </div>
 
-                    <h3 className="text-sm font-semibold text-gray-900 mt-1">{item.title}</h3>
+                    <h3 className="text-sm font-semibold text-[#1B2340] mt-1">{item.title}</h3>
 
-                    <div className="text-xs text-gray-600 mt-0.5 flex flex-wrap items-center gap-3">
+                    <div className="text-xs text-[#667085] mt-1 flex flex-wrap items-center gap-3">
                       <span className="flex items-center gap-1">
-                        <User size={12} className="text-gray-400" />
+                        <User size={12} className="text-[#98A2B3]" />
                         {item.facultyName} ({item.facultyEmail})
                       </span>
                       {item.cluster && (
-                        <span className="flex items-center gap-1 text-gray-500">
+                        <span className="flex items-center gap-1 text-[#667085]">
                           Cluster: {item.cluster}
                         </span>
                       )}
                     </div>
 
                     {item.description && (
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                      <p className="text-xs text-[#667085] mt-2 line-clamp-2">
                         {item.description}
                       </p>
                     )}
@@ -417,7 +428,7 @@ export default function CoordinatorClusterReport() {
                           href={item.certificateUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs text-indigo-600 hover:underline font-medium inline-flex items-center gap-1"
+                          className="text-xs text-[#8F6317] hover:underline font-semibold inline-flex items-center gap-1"
                         >
                           <Eye size={12} /> View Certificate
                         </a>
@@ -426,16 +437,17 @@ export default function CoordinatorClusterReport() {
                   </div>
                 </div>
 
-                <div className="shrink-0 w-64">
-                  <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                <div className="mt-4 w-full shrink-0 md:mt-0 md:w-64">
+                  <label htmlFor={`coordinator-remarks-${item.id}`} className="block text-[11px] font-medium text-[#475467] mb-1">
                     Coordinator Notes / Edits:
                   </label>
                   <input
+                    id={`coordinator-remarks-${item.id}`}
                     type="text"
                     value={item.coordinatorRemarks || ''}
                     onChange={(e) => updateRemarks(item.id, e.target.value)}
                     placeholder="e.g. Highlight in cluster spotlight..."
-                    className="w-full border border-gray-300 rounded-md px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#4338CA]"
+                    className="w-full border border-[#D0D5DD] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9962C]/40"
                   />
                 </div>
               </div>
@@ -447,19 +459,26 @@ export default function CoordinatorClusterReport() {
       {/* Confirmation Modal to Forward to Admin */}
       {showConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="forward-cluster-report-title"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 sm:p-6 space-y-4"
+          >
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Forward Cluster Report to Admin</h2>
-              <p className="text-xs text-gray-500 mt-1">
+              <h2 id="forward-cluster-report-title" className="text-lg font-semibold text-[#1B2340]">
+                Forward cluster report to Admin
+              </h2>
+              <p className="text-sm text-[#667085] mt-1">
                 You are about to submit your cluster report with{' '}
-                <strong className="text-gray-900">{includedCount} curated activities</strong> to the
+                <strong className="text-[#1B2340]">{includedCount} curated activities</strong> to the
                 central Admin for final institutional consolidation.
               </p>
             </div>
 
             <form onSubmit={handleForwardReport} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[#344054] mb-1.5">
                   Report Title
                 </label>
                 <input
@@ -467,12 +486,12 @@ export default function CoordinatorClusterReport() {
                   required
                   value={reportName}
                   onChange={(e) => setReportName(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30"
+                  className="w-full border border-[#D0D5DD] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9962C]/40"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[#344054] mb-1.5">
                   Coordinator Remarks / Summary for Admin
                 </label>
                 <textarea
@@ -480,7 +499,7 @@ export default function CoordinatorClusterReport() {
                   value={coordinatorComments}
                   onChange={(e) => setCoordinatorComments(e.target.value)}
                   placeholder="e.g. All cluster faculty submissions have been verified and approved. Ready for monthly newsletter."
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#4338CA]/30"
+                  className="w-full border border-[#D0D5DD] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9962C]/40"
                 />
               </div>
 
@@ -488,14 +507,14 @@ export default function CoordinatorClusterReport() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                  className="px-4 py-2.5 text-sm font-semibold text-[#475467] hover:bg-[#F2F4F7] rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={forwarding}
-                  className="px-5 py-2 text-xs font-bold text-white bg-[#4338CA] hover:bg-[#3730A3] rounded-md transition-colors disabled:opacity-50"
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#1B2340] hover:bg-[#29345A] rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[#C9962C] focus:ring-offset-2"
                 >
                   {forwarding ? 'Submitting…' : 'Confirm & Forward to Admin'}
                 </button>
@@ -507,4 +526,3 @@ export default function CoordinatorClusterReport() {
     </div>
   )
 }
-

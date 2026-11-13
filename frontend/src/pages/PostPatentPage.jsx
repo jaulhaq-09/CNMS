@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import PatentEntryForm from '../components/patents/PatentEntryForm'
+import PageHeader from '../components/common/PageHeader'
 
 export default function PostPatentPage() {
   const [justPosted, setJustPosted] = useState(null)
@@ -13,13 +14,10 @@ export default function PostPatentPage() {
       >
         ← Back to Post
       </Link>
-      <div>
-        <h2 className="font-serif font-semibold text-2xl text-[#1B2340]">Submit a patent</h2>
-        <p className="text-sm text-[#667085] mt-1">
-          Applied, published, or granted patents — reviewed by your coordinator before inclusion
-          in the newsletter.
-        </p>
-      </div>
+      <PageHeader
+        title="Submit a patent"
+        description="Applied, published, or granted patents — reviewed by your coordinator before inclusion in the newsletter."
+      />
 
       {justPosted && (
         <div className="bg-[#E7F3ED] border border-[#2E7D5B]/20 text-[#2E7D5B] text-sm rounded-lg px-4 py-3 animate-[fadeInUp_0.2s_ease-out]">

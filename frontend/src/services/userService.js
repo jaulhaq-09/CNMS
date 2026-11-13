@@ -51,11 +51,6 @@ const userService = {
     return response.data;
   },
 
-  getTeam: async (id) => {
-    const response = await api.get(`/api/users/${id}/team`);
-    return response.data;
-  },
-  
   // ---- Users page: tab counts and bulk role assignment (Admin) ----
   getSummary: async () => {
     const response = await api.get('/api/users/summary');
@@ -93,11 +88,6 @@ const userService = {
 
   importStatus: async (batchId) => {
     const response = await api.get(`/api/user-import/status/${batchId}`);
-    return response.data;
-  },
-
-  resendCredentials: async (userId) => {
-    const response = await api.post(`/api/user-import/resend/${userId}`);
     return response.data;
   },
 

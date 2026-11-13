@@ -670,54 +670,6 @@ router.put('/bulk-access', authenticate, authorize('SUPER_ADMIN'), async (req, r
   }
 });
 
-// SUPER_ADMIN only — the faculty who work under one Coordinator:
-// same department, and at least one cluster in common (all sections of it).
-router.get('/:id/team', authenticate, authorize('SUPER_ADMIN'), async (req, res) => {
-  try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ success: false, message: 'Invalid user id' });
-    }
-    const coordinator = await User.findById(req.params.id).select('role roles department clusters');
-    if (!coordinator) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    if (
-      coordinator.role !== 'COORDINATOR' &&
-      !(coordinator.roles || []).includes('COORDINATOR')
-    ) {
-      return res.status(400).json({ success: false, message: 'This person is not a Coordinator.' });
-    }
-
-    const clusters = coordinator.clusters || [];
-    if (!coordinator.department || clusters.length === 0) {
-      return res.json({ success: true, data: { members: [] } });
-    }
-
-    const people = await User.find({
-      $or: [{ role: 'FACULTY' }, { roles: 'FACULTY' }],
-      department: coordinator.department,
-      clusters: { $in: clusters },
-    })
-      .select('firstName lastName email clusters sections isActive')
-      .sort({ firstName: 1, lastName: 1 });
-
-    const members = people.map((p) => ({
-      _id: p._id,
-      firstName: p.firstName,
-      lastName: p.lastName,
-      email: p.email,
-      isActive: p.isActive,
-      sections: p.sections || [],
-      sharedClusters: (p.clusters || []).filter((c) => clusters.includes(c)),
-    }));
-
-    res.json({ success: true, data: { members } });
-  } catch (error) {
-    logger.error('Coordinator team error:', error.message);
-    res.status(500).json({ success: false, message: 'Could not load the faculty list' });
-  }
-});
-
 // SUPER_ADMIN only — permanently delete a user
 router.delete('/:id', authenticate, authorize('SUPER_ADMIN'), async (req, res) => {
   try {

@@ -1,6 +1,11 @@
 require('dotenv').config();
 const request = require('supertest');
 
+jest.mock('../../services/emailService', () => ({
+  sendApprovalRequestEmail: jest.fn().mockResolvedValue(true),
+  sendItemDecisionEmail: jest.fn().mockResolvedValue(true),
+}));
+
 const app = require('../../app');
 const User = require('../../models/User');
 const Department = require('../../models/Department');

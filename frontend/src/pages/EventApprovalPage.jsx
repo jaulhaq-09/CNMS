@@ -7,6 +7,7 @@ import facultyAchievementService from '../services/facultyAchievementService'
 import patentService from '../services/patentService'
 import { formatDate } from '../utils/date'
 import toast from 'react-hot-toast'
+import PageHeader from '../components/common/PageHeader'
 
 const ITEM_LABELS = {
   event: 'event',
@@ -387,8 +388,10 @@ export default function EventApprovalPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <h2 className="font-serif font-semibold text-2xl text-[#1B2340]">Approvals</h2>
+      <PageHeader
+        title="Approvals"
+        description="Choose a faculty member to review submissions from your scope."
+      >
         {!loading && events.length > 0 && (
           <span className="px-2 py-0.5 rounded-full bg-[#C9962C] text-[#1B2340] text-xs font-semibold">
             {events.length}
@@ -398,15 +401,11 @@ export default function EventApprovalPage() {
           type="button"
           onClick={() => load()}
           disabled={loading}
-          className="ml-auto text-sm px-3 py-1.5 rounded-md border border-[#E4E7EC] text-[#667085] hover:bg-[#F5F6F8] disabled:opacity-60"
+          className="text-sm px-3 py-1.5 rounded-md border border-[#E4E7EC] text-[#667085] hover:bg-[#F5F6F8] disabled:opacity-60"
         >
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
-      </div>
-      <p className="text-sm text-[#667085] -mt-4">
-        Choose a faculty member to review their posts. Approve one by one, or use
-        &quot;Approve all&quot; for that person.
-      </p>
+      </PageHeader>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

@@ -7,6 +7,8 @@ import usePermissions from '../hooks/usePermissions'
 import { PERMISSIONS } from '../config/permissions'
 import Pagination from '../components/common/Pagination'
 import { formatDate, formatDateTime, formatDateRange } from '../utils/date'
+import PageHeader from '../components/common/PageHeader'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 const TABS = [
   { key: '', label: 'All' },
@@ -34,7 +36,10 @@ const nowForInput = () => {
 }
 
 export default function NewslettersPage() {
-  const { can } = usePermissions()
+  const { can, role } = usePermissions()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const isAdmin = role === 'SUPER_ADMIN'
   const canGenerate = can(PERMISSIONS.NEWSLETTER_GENERATE)
   const canManage = can(PERMISSIONS.NEWSLETTER_PUBLISH)
   const canExport = can(PERMISSIONS.EXPORT_VIEW)
@@ -92,6 +97,15 @@ export default function NewslettersPage() {
     load(1, tab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab])
+
+  useEffect(() => {
+    const newsletterId = location.state?.newsletterId
+    if (!newsletterId) return
+
+    setExpandedId(newsletterId)
+    setTab('DRAFT')
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location.pathname, location.state, navigate])
 
   const openPanel = async () => {
     setPanelOpen(true)
@@ -229,16 +243,41 @@ export default function NewslettersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="font-serif font-semibold text-2xl text-[#1B2340]">Newsletters</h2>
-          <p className="text-sm text-[#667085] mt-1">
-            {canManage
-              ? 'The monthly college newsletter is drafted for you on the last day of each month. Review it, then publish or schedule it.'
-              : 'Published college newsletters.'}
+      {isAdmin ? (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <p className="max-w-2xl text-sm text-[#667085]">
+            Review monthly drafts or turn consolidated coordinator submissions into a formatted newsletter. Preview every draft before publishing or scheduling it.
           </p>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {canExport && (
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting}
+                title="Download all newsletters as an Excel file"
+                className="text-sm font-medium px-4 py-2 rounded-lg border border-[#C9962C] text-[#1B2340] hover:bg-[#C9962C]/10 disabled:opacity-60"
+              >
+                {exporting ? 'Exporting…' : 'Export Excel'}
+              </button>
+            )}
+            {canGenerate && !panelOpen && (
+              <button
+                type="button"
+                onClick={openPanel}
+                className="text-sm font-semibold px-4 py-2 rounded-lg bg-gradient-to-r from-[#C9962C] to-[#E0B563] text-[#1B2340] hover:brightness-105 transition-all"
+              >
+                + New newsletter
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex shrink-0 gap-2">
+      ) : (
+      <PageHeader
+        title="Newsletters"
+        description={canManage
+          ? 'The monthly college newsletter is drafted for you on the last day of each month. Review it, then publish or schedule it.'
+          : 'Published college newsletters.'}
+      >
           {canExport && (
             <button
               type="button"
@@ -259,8 +298,8 @@ export default function NewslettersPage() {
               + New newsletter
             </button>
           )}
-        </div>
-      </div>
+      </PageHeader>
+      )}
 
       {panelOpen && canGenerate && (
         <form
@@ -445,6 +484,11 @@ export default function NewslettersPage() {
                       {newsletter.recipients?.totalCount != null &&
                         ` · ${newsletter.recipients.totalCount} items`}
                     </p>
+                    {newsletter.sourceReport && (
+                      <p className="mt-1 text-xs font-medium text-[#9A6B17]">
+                        Built from consolidated coordinator submissions
+                      </p>
+                    )}
                     {newsletter.status === 'PUBLISHED' && (
                       <p className="text-xs text-[#667085] mt-1">
                         Sent to {newsletter.deliveryStats?.totalSent ?? 0} recipients

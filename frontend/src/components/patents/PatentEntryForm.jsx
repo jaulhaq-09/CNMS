@@ -413,7 +413,7 @@ export default function PatentEntryForm({ onPosted, onCollect, initial, onCancel
       </Section>
 
       {!onCollect && (
-        <div className="bg-[#F5F6F8] rounded-md p-3">
+        <div className="bg-[#F8F7F3] border border-[#E8E2D6] rounded-lg p-3 sm:p-4">
           <label className="flex items-start gap-2 text-xs text-[#334155]">
             <input
               type="checkbox"
@@ -428,11 +428,11 @@ export default function PatentEntryForm({ onPosted, onCollect, initial, onCancel
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3">
         <button
           type="submit"
           disabled={submitting || (!onCollect && !verified)}
-          className="px-5 py-2.5 rounded-md bg-gradient-to-r from-[#C9962C] to-[#E0B563] text-[#1B2340] text-sm font-semibold hover:brightness-105 hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-[#1B2340] text-white text-sm font-semibold hover:bg-[#29345A] focus:outline-none focus:ring-2 focus:ring-[#C9962C] focus:ring-offset-2 transition-all disabled:opacity-60"
         >
           {onCollect ? (initial ? 'Save changes' : 'Add patent') : submitting ? 'Submitting...' : 'Submit patent'}
         </button>
@@ -440,7 +440,7 @@ export default function PatentEntryForm({ onPosted, onCollect, initial, onCancel
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2.5 rounded-md border border-[#E4E7EC] text-sm text-[#667085] hover:bg-[#F5F6F8]"
+            className="w-full sm:w-auto px-4 py-2.5 rounded-lg border border-[#E4E7EC] text-sm text-[#667085] hover:bg-[#F5F6F8]"
           >
             Cancel
           </button>

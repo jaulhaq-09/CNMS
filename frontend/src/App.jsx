@@ -5,6 +5,7 @@ import AuthLayout from './layouts/AuthLayout'
 import DashboardLayout from './layouts/DashboardLayout'
 
 import LoginPage from './components/auth/LoginPage'
+import RegistrationInfoPage from './components/auth/RegistrationInfoPage'
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage'
 import ForgotUsernamePage from './components/auth/ForgotUsernamePage'
 import ResetPasswordPage from './components/auth/ResetPasswordPage'
@@ -42,7 +43,7 @@ export default function App() {
         {/* Public / Auth routes */}
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<Navigate to="/login" replace />} />
+          <Route path="/register" element={<RegistrationInfoPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/forgot-username" element={<ForgotUsernamePage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />

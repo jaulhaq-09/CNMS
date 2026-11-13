@@ -1,6 +1,6 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import UserManagementPage from '../../components/admin/UserManagementPage'
 import userService from '../../services/userService'
 import departmentService from '../../services/departmentService'
@@ -70,6 +70,19 @@ beforeEach(() => {
 })
 
 describe('UserManagementPage', () => {
+  it('keeps Excel import alongside the add-user section heading', async () => {
+    userService.getAll.mockResolvedValue({
+      data: mockUsers,
+      pagination: { total: 1, totalPages: 1, currentPage: 1 },
+    })
+    render(<UserManagementPage />)
+
+    const addUserHeading = await screen.findByRole('heading', { name: 'Add user' })
+    expect(
+      within(addUserHeading.closest('section')).getByRole('button', { name: 'Import from Excel' })
+    ).toBeInTheDocument()
+  })
+
   it('loads and displays users on mount', async () => {
     userService.getAll.mockResolvedValue({
       data: mockUsers,
@@ -83,6 +96,9 @@ describe('UserManagementPage', () => {
     expect(screen.getAllByText('Computer Science').length).toBeGreaterThan(0)
     expect(screen.getByText('No cluster')).toBeInTheDocument()
     expect(screen.queryByText('AI, Data Science')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Jane Faculty' }).closest('td').textContent.trim())
+      .toBe('Jane Faculty')
+    expect(screen.queryByRole('button', { name: 'Faculty' })).not.toBeInTheDocument()
   });
 
   it('shows an empty state when there are no users', async () => {
@@ -147,9 +163,9 @@ describe('UserManagementPage', () => {
 
     const roleSelect = screen.getByLabelText('Role')
     expect(roleSelect).toHaveValue('')
-    fireEvent.change(screen.getByPlaceholderText('Username'), { target: { value: 'newuser' } })
-    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'new@college.edu' } })
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'SecurePass123' } })
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'newuser' } })
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@college.edu' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'SecurePass123' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add user' }))
 
     expect(userService.create).not.toHaveBeenCalled()
@@ -312,8 +328,8 @@ describe('UserManagementPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'FACULTY' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'ADMIN' }))
-    fireEvent.mouseDown(screen.getByRole('heading', { name: 'User management' }))
-    fireEvent.click(screen.getByRole('heading', { name: 'User management' }))
+    fireEvent.mouseDown(screen.getByRole('heading', { name: 'Add user' }))
+    fireEvent.click(screen.getByRole('heading', { name: 'Add user' }))
 
     await waitFor(() => {
       expect(userService.updateRoles).toHaveBeenCalledWith('user1', ['FACULTY', 'SUPER_ADMIN'])

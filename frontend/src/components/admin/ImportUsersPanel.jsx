@@ -143,7 +143,7 @@ export default function ImportUsersPanel({ open, onClose, onFinished }) {
       <div className="relative bg-[#F5F6F8] w-full max-w-[760px] max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
         <div className="flex items-start justify-between px-6 py-5 bg-white border-b border-gray-200">
           <div>
-            <h2 className="font-serif text-xl font-semibold text-[#1B2340]">Import faculty from Excel</h2>
+            <h2 className="text-xl font-semibold text-[#1B2340]">Import faculty from Excel</h2>
             <p className="text-sm text-gray-500 mt-0.5">
               Each person gets their college email as username and a one-time password by email.
             </p>

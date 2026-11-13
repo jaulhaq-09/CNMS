@@ -14,6 +14,10 @@ const newsletterSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'NewsletterTemplate',
   },
+  sourceReport: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Report',
+  },
   periodStartDate: {
     type: Date,
     required: true,
@@ -104,6 +108,7 @@ const newsletterSchema = new mongoose.Schema({
 newsletterSchema.index({ status: 1, createdAt: -1 });
 newsletterSchema.index({ publishedAt: 1 });
 newsletterSchema.index({ scheduledFor: 1 });
+newsletterSchema.index({ sourceReport: 1 }, { unique: true, sparse: true });
 newsletterSchema.index({ name: 'text', description: 'text' });
 
 module.exports = mongoose.model('Newsletter', newsletterSchema);

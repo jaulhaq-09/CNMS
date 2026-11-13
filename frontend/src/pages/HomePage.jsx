@@ -24,6 +24,8 @@ import {
   Flame,
   Zap,
   ChevronDown,
+  Menu,
+  X,
   Compass,
   BookmarkCheck,
   CheckCircle
@@ -187,6 +189,7 @@ export default function HomePage() {
   const isAuthenticated = Boolean(auth?.isAuthenticated)
   const currentUser = auth?.user
   const [linksOpen, setLinksOpen] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -236,27 +239,27 @@ export default function HomePage() {
 
       {/* TOP NAVIGATION BAR */}
       <header className="sticky top-0 z-50 bg-[#0F1424]/90 backdrop-blur-md border-b border-white/10 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-16 sm:h-20 flex flex-wrap items-center justify-between">
           {/* Brand & Crest */}
-          <Link to="/" className="flex items-center gap-3.5 group">
+          <Link to="/" className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3.5 group md:flex-none">
             <div className="relative">
               <img
                 src={collegeLogo}
                 alt="BMSIT Crest"
-                className="h-12 w-12 rounded-full object-cover ring-2 ring-[#C9962C]/60 group-hover:ring-[#C9962C] transition-all shadow-md"
+                className="h-10 w-10 sm:h-12 sm:w-12 rounded-full object-cover ring-2 ring-[#C9962C]/60 group-hover:ring-[#C9962C] transition-all shadow-md"
               />
               <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#0F1424]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-serif font-bold text-white text-lg tracking-wide group-hover:text-amber-200 transition-colors">
-                  BMSIT &amp; Management
+                  <span className="truncate text-sm sm:text-lg">BMSIT &amp; Management</span>
                 </span>
                 <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-[#C9962C]/20 text-[#E0B563] border border-[#C9962C]/30 uppercase tracking-wider">
                   CNMS
                 </span>
               </div>
-              <p className="text-[11px] uppercase tracking-[0.22em] text-[#C9962C] font-medium">
+              <p className="hidden sm:block text-[11px] uppercase tracking-[0.22em] text-[#C9962C] font-medium">
                 College Newsletter Management System
               </p>
             </div>
@@ -322,7 +325,7 @@ export default function HomePage() {
                 </span>
                 <Link
                   to="/dashboard"
-                  className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#C9962C] to-[#E0B563] text-[#0F1424] font-semibold text-sm hover:brightness-110 shadow-lg hover:shadow-[#C9962C]/20 transition-all flex items-center gap-2 group"
+                  className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg bg-gradient-to-r from-[#C9962C] to-[#E0B563] text-[#0F1424] font-semibold text-xs sm:text-sm hover:brightness-110 shadow-lg hover:shadow-[#C9962C]/20 transition-all flex items-center gap-1.5 group"
                 >
                   <span>Dashboard</span>
                   <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
@@ -332,14 +335,68 @@ export default function HomePage() {
               <div className="flex items-center gap-2.5">
                 <Link
                   to="/login"
-                  className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#C9962C] via-[#E0B563] to-[#D4A340] text-[#0F1424] font-semibold text-sm hover:brightness-110 shadow-lg hover:shadow-amber-500/20 hover:-translate-y-0.5 transition-all flex items-center gap-2"
+                  className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg bg-gradient-to-r from-[#C9962C] via-[#E0B563] to-[#D4A340] text-[#0F1424] font-semibold text-xs sm:text-sm hover:brightness-110 shadow-lg hover:shadow-amber-500/20 hover:-translate-y-0.5 transition-all flex items-center gap-1.5"
                 >
                   <span>Sign In</span>
                   <ArrowRight size={15} />
                 </Link>
               </div>
             )}
+            <button
+              type="button"
+              aria-label={mobileNavOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileNavOpen}
+              aria-controls="mobile-navigation"
+              onClick={() => setMobileNavOpen((open) => !open)}
+              className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#C9962C]"
+            >
+              {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
+          {mobileNavOpen && (
+            <nav id="mobile-navigation" className="md:hidden w-full border-t border-white/10 py-3" aria-label="Mobile navigation">
+              <div className="grid gap-1">
+                {[
+                  { label: 'Workflow', href: '#workflow' },
+                  { label: 'Roles', href: '#roles' },
+                  { label: 'Features', href: '#features' }
+                ].map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileNavOpen(false)}
+                    className="rounded-lg px-3 py-2.5 text-sm text-slate-200 hover:bg-white/10 hover:text-amber-300"
+                  >
+                    {item.label}
+                  </a>
+                ))}
+                <Link
+                  to="/publications"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="rounded-lg px-3 py-2.5 text-sm text-slate-200 hover:bg-white/10 hover:text-amber-300"
+                >
+                  Publications
+                </Link>
+                <Link
+                  to="/newsletters"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="rounded-lg px-3 py-2.5 text-sm text-slate-200 hover:bg-white/10 hover:text-amber-300"
+                >
+                  Published newsletters
+                </Link>
+                {IMPORTANT_LINKS.map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setMobileNavOpen(false)}
+                    className="rounded-lg px-3 py-2.5 text-sm text-slate-200 hover:bg-white/10 hover:text-amber-300"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </nav>
+          )}
         </div>
       </header>
 
@@ -347,7 +404,7 @@ export default function HomePage() {
       <section className="relative overflow-hidden min-h-[88vh] flex flex-col justify-center">
         {/* Campus Background Image with Deep Academic Scrim */}
         <div
-          className="absolute inset-0 bg-cover bg-center bg-fixed scale-105"
+          className="absolute inset-0 bg-cover bg-center bg-scroll md:bg-fixed scale-105"
           style={{ backgroundImage: `url(${campusBg})` }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-[#0A0D18]/95 via-[#121626]/90 to-[#1F1932]/92" />
@@ -360,9 +417,9 @@ export default function HomePage() {
         />
 
         {/* Hero Content */}
-        <div className="relative z-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center flex flex-col items-center">
+        <div className="relative z-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20 text-center flex flex-col items-center">
           {/* Live Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs text-amber-200 font-medium mb-8 shadow-inner float-animation">
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs text-amber-200 font-medium mb-8 shadow-inner float-animation">
             <Sparkles size={14} className="text-[#C9962C] animate-spin" style={{ animationDuration: '6s' }} />
             <span>Autonomous Institutional Publishing &bull; 2026 Academic Edition</span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -413,7 +470,7 @@ export default function HomePage() {
           </div>
 
           {/* Trust & Metric Strip */}
-          <div className="mt-16 w-full max-w-5xl grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-left">
+          <div className="mt-10 sm:mt-16 w-full max-w-5xl grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-left">
             {[
               {
                 icon: Zap,

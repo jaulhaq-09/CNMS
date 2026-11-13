@@ -4,11 +4,23 @@ import toast from 'react-hot-toast'
 import templateService from '../services/templateService'
 import usePermissions from '../hooks/usePermissions'
 import { PERMISSIONS } from '../config/permissions'
+import TemplatePreview from './TemplatePreview'
 
 const STATUS_STYLES = {
   DRAFT: 'bg-[#F2F4F7] text-[#667085]',
   ACTIVE: 'bg-[#ECFDF3] text-[#067647]',
   ARCHIVED: 'bg-[#F2F4F7] text-[#667085]',
+}
+
+const getTemplatePages = (template) => {
+  const pages = template.structure?.pages
+  if (Array.isArray(pages) && pages.length > 0) return pages
+  return [
+    {
+      name: 'Page 1',
+      blocks: Array.isArray(template.structure?.blocks) ? template.structure.blocks : [],
+    },
+  ]
 }
 
 export default function TemplateList({ onSelect, onEdit }) {
@@ -17,6 +29,8 @@ export default function TemplateList({ onSelect, onEdit }) {
   const [error, setError] = useState(null)
   const [page, setPage] = useState(1)
   const [filter, setFilter] = useState('all')
+  const [previewTemplate, setPreviewTemplate] = useState(null)
+  const [previewPageIndex, setPreviewPageIndex] = useState(0)
 
   const { can } = usePermissions()
   const user = useSelector((state) => state.auth?.user)
@@ -81,10 +95,17 @@ export default function TemplateList({ onSelect, onEdit }) {
     }
   }
 
+  const openPreview = (template) => {
+    setPreviewTemplate(template)
+    setPreviewPageIndex(0)
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="font-serif font-semibold text-lg text-[#1B2340]">Templates</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        {user?.role !== 'SUPER_ADMIN' && (
+          <h2 className="font-semibold text-lg text-[#1B2340]">Templates</h2>
+        )}
         <select
           value={filter}
           onChange={(e) => {
@@ -111,12 +132,19 @@ export default function TemplateList({ onSelect, onEdit }) {
           No templates found.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((template) => (
-            <div
-              key={template._id}
-              className="bg-white border border-[#E4E7EC] rounded-lg p-5 flex flex-col"
-            >
+        <div
+          className="grid gap-4"
+          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))' }}
+        >
+          {templates.map((template) => {
+            const pages = getTemplatePages(template)
+            const blockCount = pages.reduce((count, item) => count + (item.blocks?.length || 0), 0)
+
+            return (
+              <div
+                key={template._id}
+                className="bg-white border border-[#E4E7EC] rounded-xl p-5 flex flex-col shadow-sm hover:border-[#C9962C]/40 hover:shadow-md transition-all"
+              >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <h3 className="font-semibold text-[#1B2340] text-sm leading-tight">
                   {template.name}
@@ -140,12 +168,31 @@ export default function TemplateList({ onSelect, onEdit }) {
                 <p className="text-xs text-[#667085] mb-3 line-clamp-2">{template.description}</p>
               )}
 
-              <div className="text-xs text-[#98A2B3] space-y-0.5 mb-4">
-                <p>Category: {template.category || 'General'}</p>
-                <p>Used {template.usageCount || 0} times</p>
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="rounded-lg bg-[#F8F9FB] px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-[#98A2B3]">Pages</p>
+                  <p className="mt-0.5 text-xs font-semibold text-[#475467]">{pages.length}</p>
+                </div>
+                <div className="rounded-lg bg-[#F8F9FB] px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-[#98A2B3]">Content blocks</p>
+                  <p className="mt-0.5 text-xs font-semibold text-[#475467]">{blockCount}</p>
+                </div>
+                <div className="col-span-2 flex items-center justify-between text-xs text-[#667085]">
+                  <span>{template.category || 'General'}</span>
+                  <span>
+                    Used {template.usageCount || 0} {template.usageCount === 1 ? 'time' : 'times'}
+                  </span>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-2 mt-auto pt-3 border-t border-[#F2F4F7]">
+                <button
+                  type="button"
+                  onClick={() => openPreview(template)}
+                  className="px-3 py-1.5 rounded-md border border-[#E4E7EC] text-xs text-[#475467] hover:bg-[#F5F6F8]"
+                >
+                  Preview
+                </button>
                 {can(PERMISSIONS.TEMPLATES_EDIT) && (
                   <button
                     onClick={() => onEdit(template._id)}
@@ -188,7 +235,75 @@ export default function TemplateList({ onSelect, onEdit }) {
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
+        </div>
+      )}
+
+      {previewTemplate && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#101828]/50 p-4"
+          onClick={() => setPreviewTemplate(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="template-preview-title"
+            className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-xl bg-[#F8F9FB] p-4 shadow-2xl sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 id="template-preview-title" className="font-semibold text-[#1B2340]">
+                  {previewTemplate.name}
+                </h2>
+                <p className="text-xs text-[#667085]">Template preview</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={previewPageIndex === 0}
+                  onClick={() => setPreviewPageIndex((index) => Math.max(index - 1, 0))}
+                  className="rounded-md border border-[#D0D5DD] bg-white px-3 py-1.5 text-xs font-medium text-[#475467] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Previous page
+                </button>
+                <span className="text-xs text-[#667085]">
+                  Page {previewPageIndex + 1} of {getTemplatePages(previewTemplate).length}
+                </span>
+                <button
+                  type="button"
+                  disabled={previewPageIndex >= getTemplatePages(previewTemplate).length - 1}
+                  onClick={() =>
+                    setPreviewPageIndex((index) =>
+                      Math.min(index + 1, getTemplatePages(previewTemplate).length - 1)
+                    )
+                  }
+                  className="rounded-md border border-[#D0D5DD] bg-white px-3 py-1.5 text-xs font-medium text-[#475467] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next page
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewTemplate(null)}
+                  className="ml-1 rounded-md px-2 py-1 text-sm font-semibold text-[#667085] hover:bg-white hover:text-[#1B2340]"
+                  aria-label="Close template preview"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            {(() => {
+              const pages = getTemplatePages(previewTemplate)
+              const selectedPage = pages[previewPageIndex]
+              return (
+                <TemplatePreview
+                  blocks={selectedPage?.blocks || []}
+                  pageLabel={selectedPage?.name || `Page ${previewPageIndex + 1}`}
+                />
+              )
+            })()}
+          </div>
         </div>
       )}
     </div>

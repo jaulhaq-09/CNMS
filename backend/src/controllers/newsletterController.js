@@ -2,6 +2,7 @@ const NewsletterService = require('../services/newsletterService');
 const AuditService = require('../services/auditService');
 const logger = require('../utils/logger');
 const { idOf } = require('../utils/approvalRules');
+const mongoose = require('mongoose');
 
 const VALID_STATUSES = ['DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED'];
 
@@ -100,6 +101,46 @@ exports.generateNewsletter = async (req, res) => {
   } catch (error) {
     logger.error('Generate newsletter error:', error.message);
     res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.generateFromConsolidatedReport = async (req, res) => {
+  try {
+    const { reportId, templateId } = req.body;
+    if (!mongoose.Types.ObjectId.isValid(reportId)) {
+      return res.status(400).json({ success: false, message: 'A valid consolidated report ID is required' });
+    }
+
+    const result = await NewsletterService.generateFromConsolidatedReport(
+      reportId,
+      templateId,
+      req.user._id
+    );
+
+    if (!result.alreadyCreated) {
+      await logAudit(
+        'NEWSLETTER_GENERATED',
+        req.user._id,
+        'Newsletter',
+        result.newsletter._id,
+        { sourceReport: String(reportId) },
+        result.newsletter.name
+      );
+    }
+
+    res.status(result.alreadyCreated ? 200 : 201).json({
+      success: true,
+      message: result.alreadyCreated
+        ? 'A newsletter draft already exists for this consolidated report'
+        : 'Newsletter draft created from the consolidated report',
+      data: result.newsletter,
+    });
+  } catch (error) {
+    logger.error('Generate newsletter from consolidated report error:', error.message);
+    res.status(errorStatus(error)).json({
       success: false,
       message: error.message,
     });

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
 import { Link } from 'react-router-dom'
-import { AlertCircle, CalendarPlus, CheckCircle2, Clock, Edit3, MessageSquare } from 'lucide-react'
+import { AlertCircle, Award, BookOpen, CalendarPlus, CheckCircle2, Clock, Edit3, GraduationCap, Lightbulb, MessageSquare } from 'lucide-react'
 import eventService from '../services/eventService'
 import publicationService from '../services/publicationService'
 import patentService from '../services/patentService'
@@ -168,11 +168,21 @@ export default function DashboardHome() {
           })
           setAnalytics(res.data)
         } else {
-          const res = await eventService.getAll({}, 1, 100)
+          const lists = await Promise.all([
+            safeList(eventService, {}, 100),
+            safeList(publicationService, {}, 100),
+            safeList(patentService, {}, 100),
+            safeList(facultyAchievementService, {}, 100),
+          ])
           if (cancelled) return
-          const mine = (res.data || []).filter(
-            (e) => (e.createdBy?._id || e.createdBy) === user?._id
-          )
+          const mine = lists.flatMap((res) => res.data || []).filter((item) => {
+            const ownerId =
+              item.createdBy?._id ||
+              item.createdBy ||
+              item.submittedBy?._id ||
+              item.submittedBy
+            return String(ownerId || '') === String(user?._id || user?.id || '')
+          })
           setStats({
             total: mine.length,
             approved: mine.filter((e) => e.status === 'APPROVED' || e.status === 'PUBLISHED').length,
@@ -196,36 +206,110 @@ export default function DashboardHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days, reloadTrigger])
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10">
-      {/* Main column */}
-      <div>
-        <p className="text-[11px] uppercase tracking-[0.2em] text-[#C9962C] font-semibold mb-2">
-          {formatDateLong()}
-        </p>
+  const getActivityPerson = (item) => {
+    if (item.itemType === 'event' && item.organizerName) return item.organizerName
 
-        <h1 className="font-serif font-semibold text-4xl text-[#1B2340] mb-1">
-          Welcome back{user?.firstName ? `, ${user.firstName}` : ''}
-        </h1>
-        {roleLabel && (
-          <p className="text-[#667085] mb-10">
-            Signed in as <span className="font-medium text-[#1B2340]">{roleLabel}</span>
-            {user?.department?.name && <> &middot; {user.department.name}</>}
-          </p>
-        )}
-        {!roleLabel && <div className="mb-10" />}
+    const person = item.submittedBy || item.createdBy
+    if (!person || typeof person !== 'object') return ''
+
+    const fullName = [person.firstName, person.lastName].filter(Boolean).join(' ')
+    return fullName || person.name || person.email || ''
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-5">
+        <div>
+          {user?.role !== 'SUPER_ADMIN' && (
+            <p className="text-[11px] uppercase tracking-[0.2em] text-[#C9962C] font-semibold mb-2">
+              {formatDateLong()}
+            </p>
+          )}
+
+          <h1 className={`${user?.role === 'SUPER_ADMIN' ? 'font-semibold text-2xl sm:text-3xl' : 'font-serif font-semibold text-3xl sm:text-4xl'} text-[#1B2340] mb-1`}>
+            Welcome back{user?.firstName ? `, ${user.firstName}` : ''}
+          </h1>
+          {roleLabel && (
+            <p className="text-[#667085]">
+              Signed in as <span className="font-medium text-[#1B2340]">{roleLabel}</span>
+              {user?.department?.name && <> &middot; {user.department.name}</>}
+            </p>
+          )}
+          {user?.role === 'COORDINATOR' && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                to="/approvals"
+                className="inline-flex items-center gap-2 rounded-lg bg-[#1B2340] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#29345A] focus:outline-none focus:ring-2 focus:ring-[#C9962C] focus:ring-offset-2"
+              >
+                <CheckCircle2 size={16} />
+                Review submissions
+              </Link>
+              <Link
+                to="/reports"
+                className="inline-flex items-center gap-2 rounded-lg border border-[#D0D5DD] bg-white px-4 py-2.5 text-sm font-semibold text-[#1B2340] transition-colors hover:border-[#C9962C] hover:bg-[#FFFBF2] focus:outline-none focus:ring-2 focus:ring-[#C9962C] focus:ring-offset-2"
+              >
+                <CalendarPlus size={16} />
+                Prepare cluster report
+              </Link>
+            </div>
+          )}
+        </div>
 
         {canApprove && pendingReviewCount > 0 && (
-          <div className="flex flex-wrap gap-3 mb-8">
-            <Link
-              to="/approvals"
-              className="px-4 py-2 rounded-md bg-gradient-to-r from-[#C9962C] to-[#E0B563] text-[#1B2340] text-sm font-semibold hover:brightness-105 hover:-translate-y-0.5 hover:shadow-md transition-all"
-            >
-              {pendingReviewCount} item{pendingReviewCount !== 1 ? 's' : ''} waiting on your review
-            </Link>
-          </div>
+          <Link
+            to="/approvals"
+            className="inline-flex items-center gap-4 rounded-xl border border-[#F4DBA3] bg-[#FFFBF2] px-4 py-3 text-[#1B2340] transition-colors hover:border-[#C9962C] hover:bg-[#FFF7E5]"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#C9962C]/15 text-lg font-bold text-[#9A6B17]">
+              {pendingReviewCount}
+            </span>
+            <span>
+              <span className="block text-sm font-semibold">
+                Item{pendingReviewCount !== 1 ? 's' : ''} awaiting review
+              </span>
+              <span className="mt-0.5 block text-xs text-[#667085]">Open approval queue →</span>
+            </span>
+          </Link>
         )}
-        {canViewAnalytics && (
+      </div>
+
+      {isFaculty && (
+        <section aria-labelledby="faculty-actions-heading" className="rounded-2xl border border-[#E8E2D6] bg-white p-4 sm:p-5 shadow-sm">
+          <div className="mb-4">
+            <h2 id="faculty-actions-heading" className="text-base font-semibold text-[#1B2340]">
+              Create a submission
+            </h2>
+            <p className="mt-1 text-sm text-[#667085]">
+              Record an activity or professional achievement for coordinator review.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              { label: 'Monthly report', description: 'Events and department activities', to: '/post', icon: CalendarPlus },
+              { label: 'Publication', description: 'Journal, conference, or book', to: '/post-publication', icon: BookOpen },
+              { label: 'Patent', description: 'Filed, published, or granted', to: '/post-patent', icon: Lightbulb },
+              { label: 'Achievement', description: 'Awards, grants, or certifications', to: '/post-achievement', icon: Award },
+              { label: 'Course / certification', description: 'Log professional development', to: '/nptel-courses', icon: GraduationCap },
+            ].map(({ label, description, to, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                className="group flex min-w-0 items-center gap-3 rounded-xl border border-[#EAECF0] bg-[#FCFCFB] p-3 transition hover:border-[#C9962C]/60 hover:bg-[#FFFBF2] focus:outline-none focus:ring-2 focus:ring-[#C9962C] focus:ring-offset-2"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#C9962C]/10 text-[#8F6317] transition group-hover:bg-[#C9962C]/20">
+                  <Icon size={18} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-[#1B2340]">{label}</span>
+                  <span className="mt-0.5 block text-xs leading-4 text-[#667085]">{description}</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {canViewAnalytics && (
           <div className="flex items-center justify-between mb-4">
             <p className="text-[11px] uppercase tracking-[0.15em] text-[#667085] font-semibold">
               Overview
@@ -241,13 +325,13 @@ export default function DashboardHome() {
               <option value={365}>Last year</option>
             </select>
           </div>
-        )}
-        {!statsLoading && stats && (
+      )}
+      {!statsLoading && stats && (
           <div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
               <div className="bg-gradient-to-br from-[#1B2340] to-[#2A3562] rounded-xl p-5">
                 <p className="text-[11px] uppercase tracking-wide text-white/60 mb-1">
-                  {canViewAnalytics ? 'Total Events' : 'Your Events'}
+                  {canViewAnalytics ? 'Total Events' : 'Your Submissions'}
                 </p>
                 <p className="text-3xl font-serif font-semibold text-white">{stats.total}</p>
               </div>
@@ -443,19 +527,27 @@ export default function DashboardHome() {
               })()}
             </div>
           </div>
-        )}
-      </div>
+      )}
 
-      {/* Side rail — real recent activity */}
-      <div className="lg:border-l lg:border-[#E4E7EC] lg:pl-8">
-        <p className="text-[11px] uppercase tracking-[0.2em] text-[#667085] font-semibold mb-3">
-          Recent Activity
-        </p>
+      <section aria-labelledby="recent-activity-heading" className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="recent-activity-heading" className="text-lg font-semibold text-[#1B2340]">
+              Recent Activity
+            </h2>
+            <p className="text-sm text-[#667085]">The latest submissions and status changes.</p>
+          </div>
+          {canApprove && (
+            <Link to="/approvals" className="text-sm font-semibold text-[#1B2340] hover:text-[#9A6B17]">
+              Open approvals
+            </Link>
+          )}
+        </div>
 
         {loading && (
-          <div className="bg-white border border-[#E4E7EC] rounded-lg divide-y divide-[#E4E7EC] overflow-hidden">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="p-4 space-y-2">
+              <div key={i} className="bg-white border border-[#E4E7EC] rounded-xl p-4 space-y-2">
                 <div className="h-3.5 w-2/3 bg-[#F2F4F7] rounded animate-pulse" />
                 <div className="h-2.5 w-1/2 bg-[#F2F4F7] rounded animate-pulse" />
               </div>
@@ -464,20 +556,20 @@ export default function DashboardHome() {
         )}
 
         {!loading && error && (
-          <div className="bg-white border border-[#E4E7EC] rounded-lg p-5 text-sm text-[#B42318]">
+          <div role="alert" className="bg-white border border-[#FECDCA] rounded-xl p-5 text-sm text-[#B42318]">
             {error}
           </div>
         )}
 
         {!loading && !error && activity.length === 0 && (
-          <div className="bg-white border border-dashed border-[#E4E7EC] rounded-lg p-5 text-sm text-[#667085]">
+          <div className="bg-white border border-dashed border-[#E4E7EC] rounded-xl p-5 text-sm text-[#667085]">
             Nothing to show yet. Approvals, published newsletters, and event
             updates will appear here as they happen.
           </div>
         )}
 
         {!loading && !error && activity.length > 0 && (
-          <div className="bg-white border border-[#E4E7EC] rounded-lg divide-y divide-[#E4E7EC]">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             {activity.map((item) => {
               const isEvent = item.itemType === 'event'
               const title = isEvent ? item.eventName : item.title
@@ -487,18 +579,15 @@ export default function DashboardHome() {
                   : isEvent
                     ? `/events/${item._id}`
                     : '/approvals'
-              const submitter = item.submittedBy || item.createdBy
-              const who = isEvent
-                ? item.organizerName
-                : submitter && submitter.firstName && `${submitter.firstName} ${submitter.lastName}`
+              const who = getActivityPerson(item)
               return (
                 <Link
                   key={item._id}
                   to={link}
-                  className="block p-4 hover:bg-[#F5F6F8] hover:pl-5 transition-all"
+                  className="block min-w-0 bg-white border border-[#E4E7EC] rounded-xl p-4 hover:border-[#C9962C]/50 hover:shadow-sm transition-all"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-sm font-medium text-[#1B2340] truncate">{title}</span>
+                    <span className="text-sm font-semibold text-[#1B2340] truncate">{title}</span>
                     <span
                       className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0 ${STATUS_STYLES[item.status] || 'bg-[#F2F4F7] text-[#667085]'
                         }`}
@@ -507,15 +596,16 @@ export default function DashboardHome() {
                     </span>
                   </div>
                   <p className="text-xs text-[#667085]">
-                    {ITEM_LABELS[item.itemType]} &middot; {who || 'Unknown'} &middot;{' '}
-                    {formatRelativeTimeCompact(item.createdAt)}
+                    {ITEM_LABELS[item.itemType]}
+                    {who && <> &middot; {who}</>}
+                    {' '}&middot; {formatRelativeTimeCompact(item.createdAt)}
                   </p>
                 </Link>
               )
             })}
           </div>
         )}
-      </div>
+      </section>
 
       {revisingItem && (
         <ActivityRevisionModal

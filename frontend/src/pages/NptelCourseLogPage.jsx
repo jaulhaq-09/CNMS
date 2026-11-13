@@ -8,6 +8,7 @@ import Pagination from '../components/common/Pagination'
 import { formatDate } from '../utils/date'
 import { Field, inputClass } from '../components/report/formKit'
 import { useFormDraft, DraftRestoredBanner } from '../hooks/useFormDraft'
+import PageHeader from '../components/common/PageHeader'
 
 const PAGE_SIZE = 10
 const PLATFORMS = [
@@ -545,12 +546,10 @@ export default function NptelCourseLogPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="font-serif font-semibold text-2xl text-[#1B2340]">NPTEL / Faculty Development Courses</h2>
-          <p className="text-sm text-[#667085] mt-1">Courses undertaken by faculty for professional development.</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="NPTEL / Faculty Development Courses"
+        description="Courses undertaken by faculty for professional development."
+      >
           <button
             type="button"
             onClick={exportCsv}
@@ -566,8 +565,7 @@ export default function NptelCourseLogPage() {
           >
             <Plus size={15} /> Log a course
           </button>
-        </div>
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile icon={BookOpen} label="Courses logged" value={stats.total} />

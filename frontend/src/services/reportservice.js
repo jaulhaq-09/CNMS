@@ -56,7 +56,9 @@ const reportService = {
   },
 
   getApprovedActivities: async (params = {}) => {
-    const query = new URLSearchParams(params).toString();
+    const query = new URLSearchParams(
+      Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    ).toString();
     const response = await api.get(`/api/reports/coordinator/approved-activities${query ? `?${query}` : ''}`);
     return response.data;
   },

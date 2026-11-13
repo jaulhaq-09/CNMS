@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import exportService from '../services/exportService'
 import usePermissions from '../hooks/usePermissions'
 import { PERMISSIONS } from '../config/permissions'
+import PageHeader from '../components/common/PageHeader'
 
 const STATUS_STYLES = {
   DRAFT: 'bg-[#F2F4F7] text-[#667085]',
@@ -66,14 +67,10 @@ export default function PublicationListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-serif font-semibold text-2xl text-[#1B2340]">Publications</h2>
-          <p className="text-sm text-[#667085] mt-1">
-            Journal papers, conference papers, book chapters and books submitted across departments.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Publications"
+        description="Journal papers, conference papers, book chapters and books submitted across departments."
+      >
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -96,8 +93,7 @@ export default function PublicationListPage() {
               {exporting ? 'Exporting…' : 'Export Excel'}
             </button>
           )}
-        </div>
-      </div>
+      </PageHeader>
 
       {error && <p className="text-sm text-[#B42318]">{error}</p>}
 

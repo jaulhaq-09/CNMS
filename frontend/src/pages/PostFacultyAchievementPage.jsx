@@ -7,6 +7,7 @@ import facultyAchievementService from '../services/facultyAchievementService'
 import departmentService from '../services/departmentService'
 import { Link } from 'react-router-dom'
 import { useFormDraft, DraftRestoredBanner } from '../hooks/useFormDraft'
+import PageHeader from '../components/common/PageHeader'
 
 const CATEGORIES = [
   { value: 'GRANT', label: 'Grant / Seed Money' },
@@ -148,15 +149,10 @@ export default function PostFacultyAchievementPage() {
       <Link to="/post" className="inline-flex items-center gap-1 text-sm text-[#667085] hover:text-[#C9962C] transition-colors">
         ← Back to Post
       </Link>
-      <div>
-        <h2 className="font-serif font-semibold text-2xl text-[#1B2340]">
-          Submit a faculty achievement
-        </h2>
-        <p className="text-sm text-[#667085] mt-1">
-          Grants, certifications, committee roles, and awards — reviewed by your coordinator
-          before inclusion in the newsletter.
-        </p>
-      </div>
+      <PageHeader
+        title="Submit a faculty achievement"
+        description="Grants, certifications, committee roles, and awards — reviewed by your coordinator before inclusion in the newsletter."
+      />
 
       {justPosted && (
         <div className="bg-[#E7F3ED] border border-[#2E7D5B]/20 text-[#2E7D5B] text-sm rounded-lg px-4 py-3 animate-[fadeInUp_0.2s_ease-out]">
@@ -171,7 +167,7 @@ export default function PostFacultyAchievementPage() {
         />
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white border border-[#E4E7EC] rounded-lg p-6 space-y-4 animate-[fadeInUp_0.2s_ease-out]">
+      <form onSubmit={handleSubmit} className="bg-white border border-[#E4E7EC] rounded-2xl p-4 sm:p-6 space-y-5 shadow-sm animate-[fadeInUp_0.2s_ease-out]">
         <div>
           <label htmlFor="ach-title" className="block text-sm font-medium text-[#1B2340] mb-1.5">
             Title
@@ -258,7 +254,7 @@ export default function PostFacultyAchievementPage() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label htmlFor="ach-body" className="block text-sm font-medium text-[#1B2340] mb-1.5">
               Awarding body (optional)
@@ -303,7 +299,7 @@ export default function PostFacultyAchievementPage() {
           </div>
         )}
 
-        <div className="bg-[#F5F6F8] rounded-md p-3">
+        <div className="bg-[#F8F7F3] border border-[#E8E2D6] rounded-lg p-3 sm:p-4">
           <label className="flex items-start gap-2 text-xs text-[#334155]">
             <input
               type="checkbox"
@@ -320,7 +316,7 @@ export default function PostFacultyAchievementPage() {
         <button
           type="submit"
           disabled={submitting || !verified}
-          className="px-5 py-2.5 rounded-md bg-gradient-to-r from-[#C9962C] to-[#E0B563] text-[#1B2340] text-sm font-semibold hover:brightness-105 hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-[#1B2340] text-white text-sm font-semibold hover:bg-[#29345A] focus:outline-none focus:ring-2 focus:ring-[#C9962C] focus:ring-offset-2 transition-all disabled:opacity-60"
         >
           {submitting ? 'Submitting...' : 'Submit achievement'}
         </button>

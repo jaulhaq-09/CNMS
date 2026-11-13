@@ -10,6 +10,7 @@ jest.mock('../../services/emailService', () => ({
   sendSuspiciousLoginAlert: jest.fn().mockResolvedValue(true),
   sendEventApprovedEmail: jest.fn().mockResolvedValue(true),
   sendEventRejectedEmail: jest.fn().mockResolvedValue(true),
+  sendApprovalRequestEmail: jest.fn().mockResolvedValue(true),
   sendNewsletterEmail: jest.fn().mockResolvedValue(true),
   sendNewsletterToRecipients: jest.fn().mockResolvedValue({
     totalSent: 2,
@@ -163,6 +164,89 @@ describe('Newsletter flow', () => {
     expect(res.status).toBe(201);
     expect(res.body.data.status).toBe('DRAFT');
     expect(res.body.data.compiledHtml).toContain('AI Workshop');
+  });
+
+  it('loads approved events for the coordinator report using the Event creator field', async () => {
+    await createApprovedEvent();
+
+    const res = await request(app)
+      .get('/api/reports/coordinator/approved-activities')
+      .set('Authorization', `Bearer ${coordinator.token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'EVENT',
+          facultyName: 'Test FACULTY',
+        }),
+      ])
+    );
+  });
+
+  it('takes a faculty event through coordinator forwarding and admin newsletter preview', async () => {
+    await createApprovedEvent();
+    const admin = await createUserWithRole({
+      email: 'admin@college.edu',
+      role: 'SUPER_ADMIN',
+    });
+
+    const approvedActivities = await request(app)
+      .get('/api/reports/coordinator/approved-activities')
+      .set('Authorization', `Bearer ${coordinator.token}`);
+
+    expect(approvedActivities.status).toBe(200);
+    const event = approvedActivities.body.data.find((item) => item.title === 'AI Workshop');
+    expect(event).toEqual(
+      expect.objectContaining({
+        type: 'EVENT',
+        included: true,
+        title: 'AI Workshop',
+        date: expect.any(String),
+      })
+    );
+
+    const forwarded = await request(app)
+      .post('/api/reports/coordinator/forward')
+      .set('Authorization', `Bearer ${coordinator.token}`)
+      .send({
+        name: 'September AI Cluster Report',
+        cluster: 'AI',
+        department: department._id,
+        curatedItems: [event],
+      });
+
+    expect(forwarded.status).toBe(201);
+    expect(forwarded.body.data.status).toBe('SUBMITTED_TO_ADMIN');
+
+    const consolidated = await request(app)
+      .post('/api/reports/admin/consolidate')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({
+        reportIds: [forwarded.body.data._id],
+        name: 'September Institutional Report',
+      });
+
+    expect(consolidated.status).toBe(201);
+
+    const generated = await request(app)
+      .post('/api/newsletters/from-consolidated-report')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ reportId: consolidated.body.data._id });
+
+    expect(generated.status).toBe(201);
+    expect(generated.body.data.status).toBe('DRAFT');
+    expect(generated.body.data.sourceReport).toBe(consolidated.body.data._id);
+    expect(generated.body.data.compiledHtml).toContain('AI Workshop');
+    expect(generated.body.data.compiledHtml).toContain('September Institutional Report');
+
+    const duplicate = await request(app)
+      .post('/api/newsletters/from-consolidated-report')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ reportId: consolidated.body.data._id });
+
+    expect(duplicate.status).toBe(200);
+    expect(duplicate.body.data._id).toBe(generated.body.data._id);
   });
 
   it('fails to generate when there are no approved events in range', async () => {

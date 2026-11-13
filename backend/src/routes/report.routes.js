@@ -347,7 +347,7 @@ router.get('/coordinator/approved-activities', authenticate, authorize('COORDINA
     const targetCluster = cluster || (userClusters.length === 1 ? userClusters[0] : null);
 
     const [events, publications, patents, achievements, nptel] = await Promise.all([
-      Event.find(query).populate('submittedBy', 'firstName lastName email').populate('department', 'name code').sort({ date: -1, createdAt: -1 }),
+      Event.find(query).populate('createdBy', 'firstName lastName email').populate('department', 'name code').sort({ date: -1, createdAt: -1 }),
       Publication.find(query).populate('submittedBy', 'firstName lastName email').populate('department', 'name code').sort({ createdAt: -1 }),
       Patent.find(query).populate('submittedBy', 'firstName lastName email').populate('department', 'name code').sort({ createdAt: -1 }),
       FacultyAchievement.find(query).populate('submittedBy', 'firstName lastName email').populate('department', 'name code').sort({ date: -1, createdAt: -1 }),
@@ -362,11 +362,11 @@ router.get('/coordinator/approved-activities', authenticate, authorize('COORDINA
         sourceModel: 'Event',
         type: 'EVENT',
         category: ev.category || 'Event',
-        title: ev.title,
+        title: ev.eventName,
         description: ev.description || '',
-        date: ev.date || ev.createdAt,
-        facultyName: ev.submittedBy ? `${ev.submittedBy.firstName} ${ev.submittedBy.lastName}` : 'Faculty',
-        facultyEmail: ev.submittedBy?.email || '',
+        date: ev.eventDate || ev.createdAt,
+        facultyName: ev.createdBy ? `${ev.createdBy.firstName} ${ev.createdBy.lastName}` : 'Faculty',
+        facultyEmail: ev.createdBy?.email || '',
         department: ev.department?.name || '',
         cluster: ev.cluster || targetCluster || '',
         photos: ev.photos || [],
@@ -519,7 +519,7 @@ router.get('/admin/coordinator-reports', authenticate, authorize('SUPER_ADMIN'),
     const reports = await Report.find({ type: 'CLUSTER_REPORT' })
       .populate('forwardedBy', 'firstName lastName email')
       .populate('department', 'name code')
-      .populate('consolidatedReportId', 'name')
+      .populate('consolidatedReportId', 'name summary')
       .sort({ forwardedAt: -1, createdAt: -1 });
 
     res.json({
